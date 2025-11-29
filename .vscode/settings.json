@@ -1,0 +1,23 @@
+{
+  "python.defaultInterpreterPath": ".venv/bin/python",
+  "python.analysis.typeCheckingMode": "standard",
+
+  "mypy-type-checker.importStrategy": "fromEnvironment",
+  "mypy-type-checker.args": ["--config-file=mypy.ini"],
+  
+  "ruff.enable": true,
+  "ruff.importStrategy": "fromEnvironment",
+  "ruff.lint.enable": true,
+  "ruff.format.enable": true,
+  "ruff.configurationPreference": "filesystemFirst",
+  
+  // Set ruff as default formatter
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  }
+}
