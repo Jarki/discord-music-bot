@@ -6,52 +6,132 @@ LOUD stands for Local Output Uploaded to Discord
 
 **Python Version:** 3.14.0
 
+## Project Architecture
+
+This project consists of two independently runnable components:
+- **API Server**: FastAPI-based REST API for audio source discovery and routing
+- **Discord Bot**: discord.py bot for voice channel streaming
+
+Both components share common dependencies and configuration.
+
 ## Project Structure
 
 ```
 loud_bot/
 ├── src/                              # Main source code
 │   ├── __init__.py
-│   └── __main__.py
+│   ├── api/                          # FastAPI server
+│   │   ├── __init__.py
+│   │   ├── __main__.py               # Entry point: python -m src.api
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   └── audio.py              # Audio discovery endpoints
+|   |   ├── models/                   # Any models required for the api
+│   │   └── dependencies/
+│   │       ├── __init__.py
+│   │       └── discovery_service.py  # Audio source discovery logic
+│   ├── bot/                          # Discord bot
+│   │   ├── __init__.py
+│   │   ├── __main__.py               # Entry point: python -m src.bot
+│   │   ├── client.py                 # Discord bot commands
+|   |   ├── models/                   # Any models required for the bot
+│   │   └── dependencies/
+│   │       ├── __init__.py
+│   │       ├── audio_monitor.py      # Read-only monitor access
+│   │       └── recorder.py           # AudioSource implementation
+│   └── shared/                       # Shared components
+│       ├── __init__.py
+│       ├── dependencies/
+│       │   ├── __init__.py
+│       │   └── virtual_sink.py       # Sink management (full + readonly)
+│       ├── models/
+│       │   ├── __init__.py
+│       │   └── config.py             # Pydantic settings from .env
+│       └── logging.py                # Shared logging configuration
 ├── tests/                            # Test suite
-│   ├── unit/                         # Fast, isolated unit tests
+│   ├── unit/                         # Fast, isolated unit tests (mocked)
 │   │   ├── __init__.py
-│   │   └── test_*.py
-│   ├── integration/                  # Tests with external dependencies
-│   │   ├── __init__.py
-│   │   └── test_*.py
-│   ├── e2e/                          # End-to-end tests (optional)
-│   │   ├── __init__.py
-│   │   └── test_*.py
+│   │   ├── api/
+│   │   │   └── test_*.py
+│   │   ├── bot/
+│   │   │   └── test_*.py
+│   │   └── shared/
+│   │       └── test_*.py
 │   └── conftest.py                   # Shared fixtures for all tests
+├── .env                              # Environment variables (gitignored)
+├── .env.example                      # Example environment variables
 ├── pyproject.toml                    # Dependencies & tool config
 ├── ruff.toml                         # Linting & formatting rules
 ├── pytest.ini                        # Test configuration
 └── AGENTS.md                         # This file
 ```
 
-### Test Directory Guidelines
+## Technology Stack
 
-- **`tests/unit/`** - Fast tests with no external dependencies (database, API, filesystem)
-  - Mock external services
-  - Test pure functions and business logic
-  - Should run in milliseconds
-  
-- **`tests/integration/`** - Tests that interact with external systems
-  - Database queries
-  - External API calls
-  - File I/O operations
-  - May take seconds to run
-  
-- **`tests/e2e/`** - Full workflow tests (optional)
-  - Complete user scenarios
-  - Multiple components working together
-  - Slowest tests, run less frequently
-  
-- **`tests/conftest.py`** - Shared pytest fixtures
-  - Session-scoped fixtures (run once)
-  - Function-scoped fixtures (run per test)
-  - Auto-applied markers based on directory
+### Core Dependencies
+- **FastAPI** - REST API framework
+- **discord.py** - Discord bot library
+- **Pydantic** - Configuration management via settings
+- **uvicorn** - ASGI server for FastAPI
+
+### System Dependencies
+- **PulseAudio/PipeWire** - Audio routing (`pactl`, `parec`)
+- **Hyprland** - Window manager for client metadata (`hyprctl`)
+
+### No Audio Processing Libraries
+Audio is captured as raw PCM from system sources - no additional audio processing libraries needed.
+
+## Configuration
+
+### Pydantic Settings
+Configuration is managed via Pydantic Settings and loaded from `.env`:
+
+**`src/shared/models/config.py`:**
+```python
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    # Audio configuration
+    sink_name: str = "discord_capture"
+    audio_format: str = "s16le"
+    audio_rate: int = 48000
+    audio_channels: int = 2
+    
+    # Discord configuration
+    discord_token: str
+    discord_command_prefix: str = "!"
+    
+    # API configuration
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+    
+    # Logging
+    log_level: str = "INFO"
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+```
+
+**`.env.example`:**
+```
+# Discord
+DISCORD_TOKEN=your_bot_token_here
+DISCORD_COMMAND_PREFIX=!
+
+# Audio
+SINK_NAME=discord_capture
+AUDIO_FORMAT=s16le
+AUDIO_RATE=48000
+AUDIO_CHANNELS=2
+
+# API
+API_HOST=127.0.0.1
+API_PORT=8000
+
+# Logging
+LOG_LEVEL=INFO
+```
 
 ## Development Setup
 
@@ -59,18 +139,33 @@ loud_bot/
 # Install dependencies
 uv sync
 
-# Run the application
-uv run python -m src
+# Create .env file from example
+cp .env.example .env
+# Edit .env with your Discord token
+
+# Run the API server
+uv run python -m src.api
+
+# Run the Discord bot (in separate terminal)
+uv run python -m src.bot
 ```
 
 ## Development Commands
 
 All tasks use `uv run poe <task>` via poethepoet:
 
+### Running Services
+```bash
+uv run poe api               # Start FastAPI server
+uv run poe bot               # Start Discord bot
+```
+
 ### Testing
 ```bash
-uv run poe test              # Run all tests
-uv run poe test-cov          # Run tests with coverage report
+uv run poe test              # Run unit tests only (no external dependencies)
+uv run poe test-integration  # Run integration tests (requires audio system)
+uv run poe test-all          # Run all tests (unit + integration)
+uv run poe test-cov          # Run all tests with coverage report
 ```
 
 ### Code Quality
@@ -110,28 +205,98 @@ uv run pytest                # Test directly
 - Auto-fix available for most issues via `uv run poe lint-fix`
 
 ### Type Checking
-- mypy in strict mode (if configured)
+- mypy in strict mode
 - All functions should have type hints
 - Use `from typing import` for complex types
-- Prefer `Optional[T]` over `T | None` for clarity (unless Python 3.10+)
+- Prefer modern type syntax (e.g., `str | None` over `Optional[str]`)
 
 ### Testing Requirements
-- Tests organized by type: `tests/unit/` and `tests/integration/`
+
+**Test Directory Guidelines:**
+- **`tests/unit/`** - Fast tests with no external dependencies
+  - Mock all external services (pactl, hyprctl, subprocess, Discord API)
+  - Test pure functions and business logic
+  - Should run in milliseconds
+  - Run with: `uv run poe test`
+  
+- **`tests/integration/`** - Tests that interact with external systems
+  - Audio system (PulseAudio/PipeWire) interactions
+  - File I/O operations
+  - May take seconds to run
+  - Require actual system dependencies
+  - Run with: `uv run poe test-integration`
+
+**Test Organization:**
+- Tests organized by component: `tests/unit/api/`, `tests/unit/bot/`, `tests/unit/shared/`
+- Integration tests: `tests/integration/`
 - Use pytest fixtures from `conftest.py`
 - Test files must match pattern: `test_*.py` or `*_test.py`
 - Maintain test coverage (see coverage reports with `uv run poe test-cov`)
+
+**Test Markers:**
+- `@pytest.mark.unit` - Unit tests (default)
+- `@pytest.mark.integration` - Integration tests
+- `@pytest.mark.slow` - Tests that take >1 second
+- Run specific markers: `pytest -m integration`
+
+## System Architecture
+
+### Audio Pipeline
+
+```
+1. Application (Brave/Spotify) produces audio
+   ↓
+2. Routed to null sink (discord_capture)
+   ↓
+3. Monitor source (discord_capture.monitor)
+   ↓
+4. parec captures raw PCM
+   ↓
+5. Recorder feeds to Discord bot
+   ↓
+6. Discord voice channel
+```
+
+### Component Interaction
+
+```
+API Server:
+  - Creates/manages null sink via SinkManager
+  - Scans audio sources (pactl list sink-inputs)
+  - Gets window titles (hyprctl clients)
+  - Routes selected source to null sink
+  - Exposes REST endpoints
+
+Discord Bot:
+  - Uses ReadOnlySink (cannot modify sink)
+  - Joins voice channel on command
+  - Creates Recorder when streaming
+  - Reads from monitor source via parec
+  - Streams PCM to Discord
+```
+
+### Shared Dependencies
+
+**VirtualSink Classes:**
+- `SinkManager` - Full control (create, destroy, route)
+- `ReadOnlySink` - Wrapper that raises errors on write operations
+
+**Usage:**
+- API uses `SinkManager` for full lifecycle management
+- Bot uses `ReadOnlySink` for safe read-only access
 
 ## Common Workflows
 
 ### Adding a New Feature
 1. Create feature branch
-2. Write tests first in appropriate directory (`tests/unit/` or `tests/integration/`)
-3. Implement feature in `src/`
-4. Run `uv run poe check` to validate all quality checks
-5. Commit changes
+2. Write tests first in `tests/unit/<component>/`
+3. Mock all external calls (pactl, hyprctl, subprocess, Discord API)
+4. Implement feature in `src/`
+5. Run `uv run poe check` to validate all quality checks
+6. Commit changes
 
 ### Fixing a Bug
-1. Add failing test that reproduces the bug
+1. Add failing test that reproduces the bug (with mocks)
 2. Fix the bug in source code
 3. Verify test passes: `uv run poe test`
 4. Run full quality check: `uv run poe check`
@@ -161,29 +326,7 @@ uv run poe check
 - **pyproject.toml** - Project metadata, dependencies, Poe tasks, tool configurations
 - **ruff.toml** - Ruff linting and formatting rules
 - **pytest.ini** - Pytest configuration (test discovery, markers, options)
-- **mypy.ini** - mypy type checking configuration (if exists)
-
-## Test Organization
-
-### Test Markers
-Tests can be marked for selective execution (defined in `pytest.ini`):
-- `@pytest.mark.unit` - Fast, isolated unit tests
-- `@pytest.mark.integration` - Tests with external dependencies
-- `@pytest.mark.slow` - Tests that take >1 second
-- `@pytest.mark.smoke` - Quick smoke tests
-
-### Running Specific Tests
-```bash
-# Run only unit tests
-uv run pytest tests/unit/
-
-# Run only integration tests  
-uv run pytest tests/integration/
-
-# Run tests by marker
-uv run pytest -m unit
-uv run pytest -m "not slow"
-```
+- **.env** - Environment variables (gitignored, use .env.example as template)
 
 ## Notes for AI Assistants
 
@@ -191,18 +334,21 @@ uv run pytest -m "not slow"
 - **Always** run `uv run poe check` before considering a task complete
 - All code must pass: formatting, linting, type checking, and tests
 - Match existing code style and patterns in the project
+- All external calls must be mocked in tests
 
 ### Code Organization
-- New modules go in `src/`
-- Tests mirror source structure: `src/module.py` → `tests/unit/test_module.py`
+- New modules go in appropriate `src/` subdirectory (api/bot/shared)
+- Tests mirror source structure: `src/api/routes/audio.py` → `tests/unit/api/test_audio.py`
 - Use existing fixtures from `conftest.py` when possible
 - Follow the import style: absolute imports from `src`
 
 ### Testing Guidelines
-- Write unit tests for business logic (fast, no I/O)
-- Write integration tests for external dependencies (database, APIs, files)
-- Use appropriate pytest markers
+- **Mock everything external**: subprocess, pactl, hyprctl, Discord API
+- Use `unittest.mock` or `pytest-mock` for mocking
+- Test business logic in isolation
+- Use appropriate pytest fixtures
 - Prefer parameterized tests for multiple similar cases
+- No integration or e2e tests for now
 
 ### Type Hints
 - Add type hints to all function signatures
@@ -210,8 +356,16 @@ uv run pytest -m "not slow"
 - Check against mypy strict mode
 - Document complex types with comments if needed
 
+### Configuration
+- Load config via `Settings()` from `src/shared/models/config.py`
+- Never hardcode values that should be configurable
+- Provide sensible defaults in Settings class
+- Document all config options in `.env.example`
+
 ### Common Patterns
-- Use `uv run python -m src` to run the application
+- Use `uv run python -m src.api` to run API server
+- Use `uv run python -m src.bot` to run Discord bot
 - Use `uv run poe <task>` for development tasks
-- Configuration via environment variables or config files
+- Configuration via Pydantic Settings and `.env`
 - Follow existing patterns in the codebase for consistency
+- Both services are independent but share common dependencies
