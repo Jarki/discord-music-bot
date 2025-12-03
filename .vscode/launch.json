@@ -1,11 +1,22 @@
 {
     "version": "0.2.0",
     "configurations": [
-        {
-            "name": "Python Debugger: Module",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "src"
-        }
+    {
+        "name": "Python Debugger: Module",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "src"
+    },
+    {
+        "name": "Debug Tests (pytest)",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "pytest",
+        "args": [
+            "${file}"
+        ],
+        "console": "integratedTerminal",
+        "justMyCode": true
+    }
     ]
 }

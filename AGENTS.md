@@ -162,10 +162,8 @@ uv run poe bot               # Start Discord bot
 
 ### Testing
 ```bash
-uv run poe test              # Run unit tests only (no external dependencies)
-uv run poe test-integration  # Run integration tests (requires audio system)
-uv run poe test-all          # Run all tests (unit + integration)
-uv run poe test-cov          # Run all tests with coverage report
+uv run poe test              # Run all tests (unit only, mocked)
+uv run poe test-cov          # Run tests with coverage report
 ```
 
 ### Code Quality
@@ -211,33 +209,12 @@ uv run pytest                # Test directly
 - Prefer modern type syntax (e.g., `str | None` over `Optional[str]`)
 
 ### Testing Requirements
-
-**Test Directory Guidelines:**
-- **`tests/unit/`** - Fast tests with no external dependencies
-  - Mock all external services (pactl, hyprctl, subprocess, Discord API)
-  - Test pure functions and business logic
-  - Should run in milliseconds
-  - Run with: `uv run poe test`
-  
-- **`tests/integration/`** - Tests that interact with external systems
-  - Audio system (PulseAudio/PipeWire) interactions
-  - File I/O operations
-  - May take seconds to run
-  - Require actual system dependencies
-  - Run with: `uv run poe test-integration`
-
-**Test Organization:**
+- **Unit tests only** - All external calls must be mocked
 - Tests organized by component: `tests/unit/api/`, `tests/unit/bot/`, `tests/unit/shared/`
-- Integration tests: `tests/integration/`
 - Use pytest fixtures from `conftest.py`
 - Test files must match pattern: `test_*.py` or `*_test.py`
+- Mock `pactl`, `hyprctl`, Discord API calls, and subprocess calls
 - Maintain test coverage (see coverage reports with `uv run poe test-cov`)
-
-**Test Markers:**
-- `@pytest.mark.unit` - Unit tests (default)
-- `@pytest.mark.integration` - Integration tests
-- `@pytest.mark.slow` - Tests that take >1 second
-- Run specific markers: `pytest -m integration`
 
 ## System Architecture
 
@@ -328,6 +305,72 @@ uv run poe check
 - **pytest.ini** - Pytest configuration (test discovery, markers, options)
 - **.env** - Environment variables (gitignored, use .env.example as template)
 
+## Development Roadmap
+
+The system will be built incrementally through the following phases:
+
+### Phase 1: Foundation
+**Goal:** Establish core infrastructure and shared dependencies
+
+**Components:**
+- Virtual sink management (create, destroy, route audio)
+- Configuration model with Pydantic Settings
+- Shared logging setup
+- Integration tests for audio system
+
+**Deliverables:**
+- Working sink manager with full and read-only modes
+- Type-safe configuration from .env
+- Consistent logging across services
+
+### Phase 2: API Server
+**Goal:** Build REST API for audio source discovery and routing
+
+**Components:**
+- FastAPI app with lifecycle management
+- Hyprland client discovery (hyprctl integration)
+- PulseAudio sink-input discovery (pactl integration)
+- Audio source selection and routing endpoints
+
+**Deliverables:**
+- Running API server with documented endpoints
+- Ability to list audio sources with window titles
+- Ability to route selected audio to virtual sink
+
+### Phase 3: Discord Bot
+**Goal:** Implement Discord bot for voice channel streaming
+
+**Components:**
+- Discord.py bot client with commands
+- Audio recorder (parec integration)
+- Voice channel management
+- Read-only sink access
+
+**Deliverables:**
+- Bot that joins voice channels on command
+- Streams audio from virtual sink to Discord
+- Clean lifecycle management
+
+### Phase 4: Integration & Polish
+**Goal:** Connect all components and refine user experience
+
+**Components:**
+- End-to-end workflow testing
+- Error handling and edge cases
+- Documentation and examples
+- Performance optimization
+
+**Deliverables:**
+- Complete workflow: select audio → route → stream to Discord
+- Comprehensive documentation
+- Production-ready system
+
+### Development Principles
+- **Build incrementally** - Each phase produces working components
+- **Test as you go** - Unit tests for all business logic
+- **Integration points** - Phases connect through well-defined interfaces
+- **Iterative refinement** - Features can be enhanced in later phases
+
 ## Notes for AI Assistants
 
 ### Quality Standards
@@ -343,18 +386,18 @@ uv run poe check
 - Follow the import style: absolute imports from `src`
 
 ### Testing Guidelines
+- **Use pytest-mock** - Use the `mocker` fixture from pytest-mock instead of `unittest.mock` directly. It provides automatic cleanup and better pytest integration.
 - **Mock everything external**: subprocess, pactl, hyprctl, Discord API
-- Use `unittest.mock` or `pytest-mock` for mocking
 - Test business logic in isolation
 - Use appropriate pytest fixtures
 - Prefer parameterized tests for multiple similar cases
-- No integration or e2e tests for now
 
 ### Type Hints
 - Add type hints to all function signatures
 - Use `typing` module for complex types
 - Check against mypy strict mode
 - Document complex types with comments if needed
+- **Pydantic fields**: Prefer `Annotated[type, Field(...)]` over direct `Field(...)` assignment for better type checking
 
 ### Configuration
 - Load config via `Settings()` from `src/shared/models/config.py`
