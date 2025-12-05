@@ -13,7 +13,8 @@
         "request": "launch",
         "module": "pytest",
         "args": [
-            "${file}"
+            "${file}",
+            "-s",
         ],
         "console": "integratedTerminal",
         "justMyCode": true
