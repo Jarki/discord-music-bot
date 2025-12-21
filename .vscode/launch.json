@@ -8,6 +8,12 @@
         "module": "src"
     },
     {
+        "name": "Python Debugger: Discord Bot",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "src.bot"
+    },
+    {
         "name": "Debug Tests (pytest)",
         "type": "debugpy",
         "request": "launch",

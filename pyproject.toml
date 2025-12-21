@@ -5,11 +5,15 @@ description = "LOUD stands for Local Output Uploaded to Discord"
 readme = "README.md"
 requires-python = ">=3.14.0"
 dependencies = [
+    "discord-py[voice]>=2.4.0",
     "fastapi>=0.122.0",
     "loguru>=0.7.3",
     "pydantic-settings>=2.12.0",
+    "pynacl>=1.5.0",
     "python-dotenv>=1.2.1",
+    "types-yt-dlp>=2025.12.8.20251210",
     "uvicorn[standard]>=0.38.0",
+    "yt-dlp>=2025.12.8",
 ]
 licence = { text = "MIT" }
 
