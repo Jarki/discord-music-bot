@@ -7,7 +7,7 @@ from loguru import logger
 
 from src.bot.client import Music
 from src.logger_config import setup_logger
-from src.shared.models.config import Settings
+from src.shared.models.config import settings
 
 
 async def main() -> None:
@@ -26,6 +26,9 @@ async def main() -> None:
         await bot.add_cog(Music(bot))
         # Sync the command tree to register slash commands with Discord
         await bot.tree.sync()
+        if settings.test_guild_id:
+            logger.debug(f"Syncing command tree to test guild {settings.test_guild_id}")
+            await bot.tree.sync(guild=discord.Object(id=settings.test_guild_id))
         logger.info("Command tree synced")
 
     @bot.event
@@ -35,7 +38,7 @@ async def main() -> None:
 
         logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-    token = Settings().discord_token  # type: ignore
+    token = settings.discord_token
     try:
         await bot.start(token)
     finally:

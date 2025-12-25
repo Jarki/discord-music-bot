@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # Discord configuration
     discord_token: str
     discord_command_prefix: str = "!"
+    test_guild_id: str | None = None
 
     # API configuration
     api_host: str = "127.0.0.1"
@@ -56,3 +57,6 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+
+
+settings = Settings()  # type: ignore

@@ -10,6 +10,7 @@ from discord.ext import commands
 from loguru import logger
 from yt_dlp.utils import DownloadError, GeoRestrictedError
 
+from src.bot import components, exc, utils
 from src.bot.dependencies import YTDLSource, get_in_memory_queue_manager
 from src.bot.dependencies.player import Player
 from src.bot.dependencies.player_manager import PlayerManager
@@ -134,7 +135,7 @@ class Music(commands.Cog):
 
         # If nothing is playing, start playback
         if not player.is_playing() and not player.is_paused:
-            started_track = await player.play_next(context.vc)
+            started_track = await player.play_next()
             if not started_track:
                 await context.interaction.followup.send(
                     content="Failed to start playback."
@@ -232,9 +233,20 @@ class Music(commands.Cog):
                     if not track_info:
                         continue
                     if isinstance(track_info, Track):
-                        played_track = await self._queue_track_and_play_maybe(
-                            context, track_info
-                        )
+                        try:
+                            played_track = await self._queue_track_and_play_maybe(
+                                context, track_info
+                            )
+                        except exc.NoVoiceChannelError as e:
+                            logger.error(
+                                f"Error playing track from playlist: {type(e)} {e}",
+                                exc_info=e,
+                            )
+                            await context.interaction.followup.send(
+                                content="An error occurred while trying to play the track: "
+                                "Bot is not connected to a voice channel."
+                            )
+                            return
                         if played_track is not None:
                             await context.interaction.followup.send(
                                 content=(
@@ -337,6 +349,67 @@ class Music(commands.Cog):
             )
         except ValueError as e:
             await context.interaction.response.send_message(str(e), ephemeral=True)
+
+    @app_commands.command(name="current", description="See the currently playing track")
+    @ensure_music_player_context
+    async def current(self, context: MusicPlayerContext) -> None:
+        player = context.player
+        if not player or not player.current_track:
+            await context.interaction.response.send_message(
+                "No track is currently playing.", ephemeral=True
+            )
+            return
+
+        track = player.current_track
+        embed = self._get_track_card(track)
+        await context.interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="queue", description="Show the current queue")
+    @ensure_music_player_context
+    async def queue(self, context: MusicPlayerContext) -> None:
+        player = context.player
+        if not player:
+            await context.interaction.response.send_message(
+                "No player active for this guild.", ephemeral=True
+            )
+            return
+
+        all_tracks = player.get_all()
+
+        songs_per_page = 10
+
+        async def refresh_queue() -> tuple[str, list[str]]:
+            # Fetch fresh data
+            all_tracks = player.get_all()
+            pages = utils.tracks_to_pages(all_tracks, songs_per_page=songs_per_page)
+            return f"Current Queue ({len(all_tracks)} songs)", pages
+
+        pages = utils.tracks_to_pages(all_tracks, songs_per_page=songs_per_page)
+        view = components.PaginatedView(
+            title=f"Current Queue ({len(all_tracks)} songs)",
+            pages=pages,
+            on_update=refresh_queue,
+        )
+        await context.interaction.response.send_message(
+            content=view.get_content(),
+            ephemeral=True,
+            view=view,
+        )
+
+    @app_commands.command(name="clear", description="Clear the current queue")
+    @ensure_music_player_context
+    async def clear(self, context: MusicPlayerContext) -> None:
+        player = context.player
+        if not player:
+            await context.interaction.response.send_message(
+                "No player active for this guild.", ephemeral=True
+            )
+            return
+
+        player.clear_queue()
+        await context.interaction.response.send_message(
+            "Cleared the queue.", ephemeral=True
+        )
 
     def _get_track_card(self, track: Track, error: bool = False) -> discord.Embed:
         """Build an embed from a `Track` model."""
