@@ -3,6 +3,8 @@
 This module provides fixtures that are available to all test modules.
 """
 
+import time
+
 import pytest
 
 from src.shared.models.config import Settings
@@ -51,3 +53,11 @@ def settings(test_settings: Settings) -> Settings:
         Settings instance configured for testing
     """
     return test_settings
+
+
+@pytest.fixture
+def timer():
+    start = time.perf_counter()
+    yield
+    end = time.perf_counter()
+    print(f"\n⏱️  Test took {end - start:.4f} seconds")

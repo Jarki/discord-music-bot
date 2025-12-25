@@ -147,7 +147,7 @@ class InMemoryQueueManager:
 
         return self._queues[queue_id].items.copy()
 
-    def get_next(self, queue_id: str) -> Track:
+    def get_next(self, queue_id: str, force_skip: bool = False) -> Track:
         """Advance cursor and return next item.
 
         Behavior depends on current mode:
@@ -187,6 +187,10 @@ class InMemoryQueueManager:
             return queue.items[queue.cursor]
 
         elif queue.mode == QueueMode.REPEAT_SINGLE:
+            if force_skip:
+                queue.cursor += 1
+                if queue.cursor >= len(queue.items):
+                    queue.cursor = 0
             if queue.cursor == -1 and len(queue.items) > 0:
                 queue.cursor = 0
             if 0 <= queue.cursor < len(queue.items):
@@ -282,7 +286,8 @@ class InMemoryQueueManager:
             RuntimeError: If queue not found
         """
         if queue_id not in self._queues:
-            raise RuntimeError(f"Queue not found: {queue_id}")
+            queue = QueueModel(queue_id=queue_id)
+            self._queues[queue_id] = queue
 
         queue = self._queues[queue_id]
 

@@ -30,7 +30,7 @@ class QueueProtocol(Protocol):
         """Get all items in queue."""
         ...
 
-    def get_next(self, queue_id: str) -> Track:
+    def get_next(self, queue_id: str, force_skip: bool = False) -> Track:
         """Advance cursor and return next item."""
         ...
 

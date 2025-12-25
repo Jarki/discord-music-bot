@@ -19,7 +19,14 @@ async def main() -> None:
     intents.voice_states = True
 
     bot = commands.Bot(command_prefix="/", intents=intents)
-    await bot.add_cog(Music(bot))
+
+    @bot.event
+    async def setup_hook() -> None:
+        """Called when the bot is starting up"""
+        await bot.add_cog(Music(bot))
+        # Sync the command tree to register slash commands with Discord
+        await bot.tree.sync()
+        logger.info("Command tree synced")
 
     @bot.event
     async def on_ready() -> None:

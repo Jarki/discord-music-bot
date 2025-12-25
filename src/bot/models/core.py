@@ -3,6 +3,7 @@
 import uuid
 from enum import Enum
 
+from discord import app_commands
 from pydantic import BaseModel, Field
 
 
@@ -13,6 +14,27 @@ class QueueMode(str, Enum):
     REPEAT_QUEUE = "repeat_queue"
     REPEAT_SINGLE = "repeat_single"
     SHUFFLE = "shuffle"
+
+    @staticmethod
+    def _format_name(value: str) -> str:
+        """Convert snake_case to Title Case with emoji"""
+        emoji_map = {
+            "no_repeat": "🔁",
+            "repeat_queue": "🔂",
+            "repeat_single": "🔂",
+            "shuffle": "🔀",
+        }
+        emoji = emoji_map.get(value, "")
+        title = value.replace("_", " ").title()
+        return f"{emoji} {title}".strip()
+
+    @classmethod
+    def choices(cls) -> list[app_commands.Choice[str]]:
+        """Generate user-friendly choices automatically"""
+        return [
+            app_commands.Choice(name=cls._format_name(mode.value), value=mode.value)
+            for mode in cls
+        ]
 
 
 class Track(BaseModel):
@@ -28,6 +50,12 @@ class Track(BaseModel):
     thumbnail_url: str | None = None
     author_name: str | None = None
     duration: int = 0  # Duration in seconds
+
+
+class PlaylistTrack(BaseModel):
+    """Represents a track within a playlist context. Data needs to be loaded"""
+
+    yt_url: str
 
 
 class QueueModel(BaseModel):

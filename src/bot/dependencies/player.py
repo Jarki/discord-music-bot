@@ -6,7 +6,7 @@ from loguru import logger
 
 from src.bot.dependencies.queue import QueueProtocol
 from src.bot.dependencies.ytdlp import YTDLSource
-from src.bot.models.core import Track
+from src.bot.models.core import QueueMode, Track
 
 if TYPE_CHECKING:
     from discord.ext.commands import Bot
@@ -26,7 +26,10 @@ class Player:
         self.guild_id = guild_id
         self.queue_manager = queue_manager
         self.bot = bot
+        self.is_paused = False
         self._current_track: Track | None = None
+
+        self._autoplay = True
 
     def _get_voice_client(self) -> discord.VoiceClient | None:
         """Get the voice client for this guild.
@@ -54,6 +57,56 @@ class Player:
         """
         return self.queue_manager.queue_item(self.guild_id, track)
 
+    async def _play_track(
+        self, track: Track, voice_client: discord.VoiceClient
+    ) -> Track | None:
+        """Play a specific track immediately.
+
+        Args:
+            track: The track to play
+            voice_client: The voice client to use
+        """
+
+        try:
+            source = await YTDLSource.stream_from_url(track.url, loop=self.bot.loop)
+            voice_client.play(source, after=self._after_playback)
+            logger.info(f"Now playing in guild {self.guild_id}: {track.title}")
+            return track
+        except Exception as e:
+            logger.error(f"Error playing track in guild {self.guild_id}: {e}")
+            self._current_track = None
+            return None
+
+    def _advance_queue(self, force_skip: bool = False) -> Track | None:
+        """Advance the queue cursor without playing the next track."""
+        try:
+            track = self.queue_manager.get_next(self.guild_id, force_skip=force_skip)
+            return track
+        except RuntimeError as e:
+            logger.debug(f"Queue exhausted for guild {self.guild_id}: {e}")
+            return None
+
+    async def _autoplay_next(
+        self, voice_client: discord.VoiceClient | None = None
+    ) -> None:
+        """Automatically play the next track based on autoplay logic.
+
+        Args:
+            voice_client: Optional voice client. If not provided, will fetch it.
+        """
+        if not self._autoplay:
+            self._autoplay = True
+            return
+
+        if not voice_client:
+            logger.warning(f"No voice client for guild {self.guild_id}")
+            return
+
+        track = self._advance_queue()
+        self._current_track = track
+        if track is not None:
+            await self._play_track(track, voice_client)
+
     async def play_next(
         self, voice_client: discord.VoiceClient | None = None
     ) -> Track | None:
@@ -72,24 +125,13 @@ class Player:
             logger.warning(f"No voice client for guild {self.guild_id}")
             return None
 
-        try:
-            track = self.queue_manager.get_next(self.guild_id)
-        except RuntimeError as e:
-            logger.debug(f"Queue exhausted for guild {self.guild_id}: {e}")
-            self._current_track = None
-            return None
-
+        track = self._advance_queue()
         self._current_track = track
 
-        try:
-            source = await YTDLSource.stream_from_url(track.url, loop=self.bot.loop)
-            voice_client.play(source, after=self._after_playback)
-            logger.info(f"Now playing in guild {self.guild_id}: {track.title}")
-            return track
-        except Exception as e:
-            logger.error(f"Error playing track in guild {self.guild_id}: {e}")
-            self._current_track = None
-            return None
+        if self._current_track is not None:
+            await self._play_track(self._current_track, voice_client)
+
+        return self._current_track
 
     def _after_playback(self, error: Exception | None) -> None:
         """Callback invoked when a track finishes playing.
@@ -104,7 +146,7 @@ class Player:
         voice_client = self._get_voice_client()
         if voice_client and voice_client.is_connected():
             asyncio.run_coroutine_threadsafe(
-                self.play_next(voice_client), self.bot.loop
+                self._autoplay_next(voice_client), self.bot.loop
             )
 
     @property
@@ -126,6 +168,7 @@ class Player:
         vc = self._get_voice_client()
         if vc and vc.is_playing():
             vc.pause()
+            self.is_paused = True
             return True
         return False
 
@@ -138,6 +181,7 @@ class Player:
         vc = self._get_voice_client()
         if vc and vc.is_paused():
             vc.resume()
+            self.is_paused = False
             return True
         return False
 
@@ -153,3 +197,45 @@ class Player:
             self._current_track = None
             return True
         return False
+
+    async def skip_tracks(self, count: int) -> (int, Track | None):
+        """Skip multiple tracks in the queue and start playing the next one.
+
+        Args:
+            count: Number of tracks to skip (must be >= 1)
+
+        Returns:
+            Number of tracks actually skipped
+        """
+        if count <= 0:
+            return 0
+
+        # Advance cursor count times
+        skipped = 0
+        track = None
+        for _ in range(count):
+            track = self._advance_queue(force_skip=True)
+            if track is not None:
+                skipped += 1
+
+        self._current_track = track
+        self._autoplay = False
+        if track is not None:
+            self.stop()
+            voice_client = self._get_voice_client()
+            if voice_client:
+                await self._play_track(track, voice_client)
+
+        if track is None:
+            self.stop()
+            self._current_track = None
+
+        return skipped, self._current_track
+
+    def set_mode(self, mode: QueueMode) -> None:
+        """Set the playback mode for this player's queue.
+
+        Args:
+            mode: The playback mode to set
+        """
+        self.queue_manager.set_mode(self.guild_id, mode)

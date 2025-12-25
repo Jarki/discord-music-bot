@@ -5,11 +5,12 @@ from typing import Any
 import discord
 import yt_dlp
 
-from src.bot.models import Track
+from src.bot.models import PlaylistTrack, Track
 
 ytdl_format_options: dict[str, Any] = {
     "format": "bestaudio/best",
     "outtmpl": "%(extractor)s-%(id)s-%(title)s.%(ext)s",
+    "extract_flat": "in_playlist",
     "restrictfilenames": True,
     "nocheckcertificate": True,
     "ignoreerrors": False,
@@ -44,16 +45,29 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return cls(discord.FFmpegPCMAudio(url, **ffmpeg_options))
 
     @classmethod
-    async def get_track_info(
+    async def get_tracks_info(
         cls,
         url: str,
         *,
         loop: asyncio.AbstractEventLoop | None = None,
-    ) -> Track:
+    ) -> Track | list[PlaylistTrack]:
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=False)
+            None, lambda: ytdl.extract_info(url, download=False, process=True)
         )
+
+        if "entries" in data:
+            # Playlist
+            tracks = []
+            for entry in data["entries"]:
+                track_url = entry.get("url")
+                if track_url is None:
+                    continue
+
+                pt = PlaylistTrack(yt_url=track_url)
+                tracks.append(pt)
+            return tracks
+
         track_url = data.get("url")
         if track_url is None:
             raise ValueError("No URL found in YouTube DL data")
