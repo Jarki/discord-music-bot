@@ -14,7 +14,7 @@ from src.bot import components, exc, utils
 from src.bot.dependencies import YTDLSource, get_in_memory_queue_manager
 from src.bot.dependencies.player import Player
 from src.bot.dependencies.player_manager import PlayerManager
-from src.bot.models.core import QueueMode, Track
+from src.bot.models.core import PlaylistTrack, QueueMode, SearchResult, Track
 
 
 class MusicPlayerContext(pydantic.BaseModel):
@@ -23,6 +23,7 @@ class MusicPlayerContext(pydantic.BaseModel):
     player_manager: PlayerManager
     player: Player
     author: discord.Member
+    text_channel: discord.TextChannel
     vc: discord.VoiceClient
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
@@ -57,6 +58,14 @@ def ensure_music_player_context(func: Callable) -> Callable:
         if self.player_manager is None:
             raise RuntimeError("Player manager not initialized.")
 
+        if interaction.channel is None or not isinstance(
+            interaction.channel, discord.TextChannel
+        ):
+            await interaction.response.send_message(
+                "❌ Interaction channel is invalid.", ephemeral=True
+            )
+            return
+
         player = self.player_manager.get_or_create_player(str(interaction.guild.id))
 
         context = MusicPlayerContext(
@@ -66,6 +75,7 @@ def ensure_music_player_context(func: Callable) -> Callable:
             player=player,
             author=author,
             vc=vc,
+            text_channel=interaction.channel,
         )
 
         return await func(self, context, *args, **kwargs)
@@ -144,6 +154,37 @@ class Music(commands.Cog):
 
         return track
 
+    async def _handle_search_result_selection(
+        self,
+        context: MusicPlayerContext,
+        result: SearchResult,
+    ) -> None:
+        """Handle the selection of a search result."""
+        try:
+            track_info = await YTDLSource.get_tracks_info(
+                result.url, loop=self.bot.loop
+            )
+            if isinstance(track_info, Track):
+                played_track = await self._queue_track_and_play_maybe(
+                    context, track_info
+                )
+                channel = context.interaction.channel
+                if channel is None or not isinstance(channel, discord.TextChannel):
+                    logger.error("Interaction channel is None or not a TextChannel")
+                    return
+                if played_track is not None:
+                    await channel.send(
+                        content=f"Added to queue: {self._format_track_link(played_track)}",
+                        embed=self._get_track_card(played_track, context.author),
+                    )
+        except Exception as e:
+            logger.error(
+                f"Error loading/playing selected search result: {type(e)} {e}",
+            )
+            await context.interaction.followup.send(
+                content="An error occurred while processing the selected track."
+            )
+
     async def try_handle_get_track_info_from_yt_url(
         self,
         context: MusicPlayerContext,
@@ -191,7 +232,7 @@ class Music(commands.Cog):
     @ensure_music_player_context
     async def play(self, context: MusicPlayerContext, song: str) -> None:
         """Add a track to the queue and play if nothing is playing"""
-        await context.interaction.response.defer(ephemeral=False)
+        await context.interaction.response.defer(ephemeral=True)
 
         try:
             track_or_tracklist = await YTDLSource.get_tracks_info(
@@ -199,15 +240,31 @@ class Music(commands.Cog):
             )
             if isinstance(track_or_tracklist, Track):
                 logger.debug(f"Single track URL: {track_or_tracklist.url}")
+                await context.interaction.followup.send(
+                    content="Searching for your track...",
+                )
                 played_track = await self._queue_track_and_play_maybe(
                     context, track_or_tracklist
                 )
                 if played_track is not None:
-                    await context.interaction.followup.send(
-                        content=f"Added to queue: {self._format_track_link(played_track)}",
-                        embed=self._get_track_card(played_track),
+                    await context.interaction.edit_original_response(
+                        content="Track added to the queue!",
                     )
-            elif isinstance(track_or_tracklist, list):
+                    await context.text_channel.send(
+                        content=f"Added to queue: {self._format_track_link(played_track)}",
+                        embed=self._get_track_card(played_track, context.author),
+                    )
+                else:
+                    await context.interaction.followup.send(
+                        content="Failed to add track to queue.",
+                        ephemeral=True,
+                    )
+            elif (
+                isinstance(track_or_tracklist, list)
+                and len(track_or_tracklist) > 0
+                and isinstance(track_or_tracklist[0], PlaylistTrack)
+            ):
+                track_or_tracklist = cast(list[PlaylistTrack], track_or_tracklist)
                 logger.debug(f"Playlist with {len(track_or_tracklist)} tracks")
                 if len(track_or_tracklist) == 0:
                     await context.interaction.followup.send(
@@ -240,7 +297,6 @@ class Music(commands.Cog):
                         except exc.NoVoiceChannelError as e:
                             logger.error(
                                 f"Error playing track from playlist: {type(e)} {e}",
-                                exc_info=e,
                             )
                             await context.interaction.followup.send(
                                 content="An error occurred while trying to play the track: "
@@ -248,13 +304,39 @@ class Music(commands.Cog):
                             )
                             return
                         if played_track is not None:
-                            await context.interaction.followup.send(
+                            await context.text_channel.send(
                                 content=(
                                     f"Queueing track {i} out of {len(track_or_tracklist)}: "
                                     f"{self._format_track_link(played_track)}"
                                 ),
-                                embed=self._get_track_card(played_track),
+                                embed=self._get_track_card(
+                                    played_track, context.author
+                                ),
                             )
+                await context.interaction.edit_original_response(
+                    content="Tracks added successfully",
+                )
+
+            elif (
+                isinstance(track_or_tracklist, list)
+                and len(track_or_tracklist) > 0
+                and isinstance(track_or_tracklist[0], SearchResult)
+            ):
+                search_results = cast(list[SearchResult], track_or_tracklist)
+                logger.debug(
+                    f"Search returned {len(track_or_tracklist)} results, taking the first one"
+                )
+                view = components.SearchResultsView(
+                    results=search_results,
+                    on_select=lambda result: self._handle_search_result_selection(
+                        context, result
+                    ),
+                )
+                await context.interaction.followup.send(
+                    embed=view.get_embed(),
+                    view=view,
+                    ephemeral=True,
+                )
 
         except Exception as e:
             logger.error(f"Error loading/playing track: {type(e)} {e}", exc_info=e)
@@ -287,7 +369,7 @@ class Music(commands.Cog):
                 await context.interaction.response.send_message(
                     f"Skipped {skipped} track(s). Now playing: {self._format_track_link(track)}",
                     ephemeral=False,
-                    embed=self._get_track_card(track),
+                    embed=self._get_track_card(track, context.author),
                 )
             else:
                 await context.interaction.response.send_message(
@@ -361,7 +443,7 @@ class Music(commands.Cog):
             return
 
         track = player.current_track
-        embed = self._get_track_card(track)
+        embed = self._get_track_card(track, context.author)
         await context.interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="queue", description="Show the current queue")
@@ -411,7 +493,9 @@ class Music(commands.Cog):
             "Cleared the queue.", ephemeral=True
         )
 
-    def _get_track_card(self, track: Track, error: bool = False) -> discord.Embed:
+    def _get_track_card(
+        self, track: Track, requester: discord.Member, error: bool = False
+    ) -> discord.Embed:
         """Build an embed from a `Track` model."""
         title = track.title
         url = track.url
@@ -437,6 +521,8 @@ class Music(commands.Cog):
             if embed.description is None:
                 embed.description = ""
             embed.description += f"\n⏱️ `{minutes}:{seconds:02d}`"
+
+        embed.set_footer(text=f"{requester}", icon_url=requester.display_avatar.url)
 
         return embed
 

@@ -1,8 +1,9 @@
-from .core import PlaylistTrack, QueueMode, QueueModel, Track
+from .core import PlaylistTrack, QueueMode, QueueModel, SearchResult, Track
 
 __all__ = [
     "PlaylistTrack",
     "QueueMode",
     "QueueModel",
+    "SearchResult",
     "Track",
 ]

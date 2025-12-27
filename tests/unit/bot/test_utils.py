@@ -1,6 +1,5 @@
 """Unit tests for bot utilities."""
 
-
 from src.bot.models import Track
 from src.bot.utils import tracks_to_pages
 

@@ -5,7 +5,7 @@ from typing import Any
 import discord
 import yt_dlp
 
-from src.bot.models import PlaylistTrack, Track
+from src.bot.models import PlaylistTrack, SearchResult, Track
 
 ytdl_format_options: dict[str, Any] = {
     "format": "bestaudio/best",
@@ -17,7 +17,7 @@ ytdl_format_options: dict[str, Any] = {
     "logtostderr": False,
     "quiet": True,
     "no_warnings": True,
-    "default_search": "auto",
+    "default_search": "ytsearch5",
     "source_address": "0.0.0.0",  # bind to ipv4 since ipv6 addresses cause issues sometimes
 }
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)  # type: ignore
@@ -50,11 +50,34 @@ class YTDLSource(discord.PCMVolumeTransformer):
         url: str,
         *,
         loop: asyncio.AbstractEventLoop | None = None,
-    ) -> Track | list[PlaylistTrack]:
+    ) -> Track | list[PlaylistTrack] | list[SearchResult]:
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(
             None, lambda: ytdl.extract_info(url, download=False, process=True)
         )
+
+        if data.get("extractor") == "youtube:search":
+            # Search results
+            results = []
+            if "entries" not in data:
+                raise ValueError("No entries found in YouTube search data")
+            entries: list[dict] = data["entries"]
+
+            for entry in entries:
+                track_url = entry.get("url")
+                if track_url is None:
+                    continue
+
+                sr = SearchResult(
+                    title=entry.get("title") or "Unknown Title",
+                    url=track_url,
+                    author_name=entry.get("uploader"),
+                    duration=int(entry.get("duration") or 0),
+                )
+                results.append(sr)
+            if len(results) == 1:
+                return results[0]
+            return results
 
         if "entries" in data:
             # Playlist

@@ -58,6 +58,15 @@ class PlaylistTrack(BaseModel):
     yt_url: str
 
 
+class SearchResult(BaseModel):
+    """Represents a search result item."""
+
+    title: str
+    url: str
+    author_name: str | None = None
+    duration: int = 0  # Duration in seconds
+
+
 class QueueModel(BaseModel):
     """Complete state of a queue including items, cursor, and mode."""
 
