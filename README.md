@@ -4,6 +4,9 @@ A Discord bot that streams YouTube audio to voice channels.
 
 LOUD stands for Local Output Uploaded to Discord
 
+> **⚠️ Educational Purpose Only**
+> This project is intended for educational purposes and personal use only. It demonstrates Discord bot development and audio streaming techniques. Users are responsible for ensuring their usage complies with YouTube's Terms of Service and local laws. This bot is not intended for commercial use or public deployment.
+
 ## Features
 
 - 🎵 Play music from YouTube URLs or search queries
