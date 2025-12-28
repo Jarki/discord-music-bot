@@ -22,14 +22,9 @@ class Settings(BaseSettings):
         >>> settings = Settings(discord_token="custom")  # Override
 
     Attributes:
-        sink_name: Name of the PulseAudio/PipeWire null sink
-        audio_format: Audio format for recording (e.g., s16le)
-        audio_rate: Audio sample rate in Hz
-        audio_channels: Number of audio channels
         discord_token: Discord bot authentication token (required)
         discord_command_prefix: Prefix for bot commands
-        api_host: Host address for the API server
-        api_port: Port number for the API server
+        test_guild_id: Optional Discord guild ID for testing
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
 
@@ -40,20 +35,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Audio configuration
-    sink_name: str = "discord_capture"
-    audio_format: str = "s16le"
-    audio_rate: int = 48000
-    audio_channels: int = 2
-
     # Discord configuration
     discord_token: str
     discord_command_prefix: str = "!"
     test_guild_id: str | None = None
-
-    # API configuration
-    api_host: str = "127.0.0.1"
-    api_port: int = 8000
 
     # Logging
     log_level: str = "INFO"

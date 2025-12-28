@@ -26,12 +26,6 @@ def test_settings() -> Settings:
         # Override with test values (constructor args take precedence over .env)
         discord_token="test_token_12345",
         discord_command_prefix="!",
-        sink_name="test_sink",
-        audio_format="s16le",
-        audio_rate=48000,
-        audio_channels=2,
-        api_host="127.0.0.1",
-        api_port=8000,
         log_level="DEBUG",
     )
 

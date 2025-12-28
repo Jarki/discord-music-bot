@@ -15,14 +15,9 @@ class TestSettingsDefaults:
         """Test that Settings loads with default values when discord_token is provided."""
         settings = Settings(discord_token="test_token")
 
-        assert settings.sink_name == "discord_capture"
-        assert settings.audio_format == "s16le"
-        assert settings.audio_rate == 48000
-        assert settings.audio_channels == 2
         assert settings.discord_command_prefix == "!"
-        assert settings.api_host == "127.0.0.1"
-        assert settings.api_port == 8000
         assert settings.log_level == "INFO"
+        assert settings.test_guild_id is None
 
     def test_settings_discord_token_required(
         self, monkeypatch: pytest.MonkeyPatch
@@ -45,41 +40,26 @@ class TestSettingsOverrides:
         """Test that constructor arguments override default values."""
         settings = Settings(
             discord_token="custom_token",
-            sink_name="custom_sink",
-            audio_rate=44100,
-            api_port=9000,
+            discord_command_prefix="?",
+            log_level="DEBUG",
         )
 
         assert settings.discord_token == "custom_token"
-        assert settings.sink_name == "custom_sink"
-        assert settings.audio_rate == 44100
-        assert settings.api_port == 9000
-        # Non-overridden values still use defaults
-        assert settings.audio_channels == 2
-        assert settings.log_level == "INFO"
+        assert settings.discord_command_prefix == "?"
+        assert settings.log_level == "DEBUG"
 
     def test_settings_override_all_fields(self) -> None:
         """Test overriding all configuration fields."""
         settings = Settings(
             discord_token="token123",
             discord_command_prefix="?",
-            sink_name="my_sink",
-            audio_format="s32le",
-            audio_rate=96000,
-            audio_channels=1,
-            api_host="0.0.0.0",
-            api_port=3000,
+            test_guild_id="12345",
             log_level="ERROR",
         )
 
         assert settings.discord_token == "token123"
         assert settings.discord_command_prefix == "?"
-        assert settings.sink_name == "my_sink"
-        assert settings.audio_format == "s32le"
-        assert settings.audio_rate == 96000
-        assert settings.audio_channels == 1
-        assert settings.api_host == "0.0.0.0"
-        assert settings.api_port == 3000
+        assert settings.test_guild_id == "12345"
         assert settings.log_level == "ERROR"
 
 
@@ -89,14 +69,14 @@ class TestSettingsValidation:
     def test_settings_type_validation(self) -> None:
         """Test that Pydantic validates types correctly."""
         # Valid types
-        settings = Settings(discord_token="token", audio_rate=48000)
-        assert isinstance(settings.audio_rate, int)
+        settings = Settings(discord_token="token", log_level="INFO")
+        assert isinstance(settings.log_level, str)
         assert isinstance(settings.discord_token, str)
 
-    def test_settings_invalid_type_audio_rate(self) -> None:
-        """Test that invalid audio_rate type raises ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            Settings(discord_token="token", audio_rate="not_an_integer")  # type: ignore
+    def test_settings_invalid_type_test_guild_id(self) -> None:
+        """Test that invalid test_guild_id type raises ValidationError."""
+        with pytest.raises(ValidationError):
+            Settings(discord_token="token", test_guild_id=12345)  # type: ignore
 
         assert "audio_rate" in str(exc_info.value)
 
@@ -125,29 +105,29 @@ class TestSettingsCaseInsensitivity:
         """Test that env var names are case-insensitive."""
         # Temporarily set uppercase env var
         os.environ["DISCORD_TOKEN"] = "env_token"
-        os.environ["SINK_NAME"] = "env_sink"
+        os.environ["LOG_LEVEL"] = "ERROR"
 
         try:
             settings = Settings()  # type: ignore[call-arg]
             assert settings.discord_token == "env_token"
-            assert settings.sink_name == "env_sink"
+            assert settings.log_level == "ERROR"
         finally:
             # Cleanup
             os.environ.pop("DISCORD_TOKEN", None)
-            os.environ.pop("SINK_NAME", None)
+            os.environ.pop("LOG_LEVEL", None)
 
     def test_settings_lowercase_env_vars(self) -> None:
         """Test that lowercase env vars work due to case_sensitive=False."""
         os.environ["DISCORD_TOKEN"] = "lower_token"
-        os.environ["API_PORT"] = "9999"
+        os.environ["DISCORD_COMMAND_PREFIX"] = "?"
 
         try:
             settings = Settings()  # type: ignore[call-arg]
             assert settings.discord_token == "lower_token"
-            assert settings.api_port == 9999
+            assert settings.discord_command_prefix == "?"
         finally:
             os.environ.pop("DISCORD_TOKEN", None)
-            os.environ.pop("API_PORT", None)
+            os.environ.pop("DISCORD_COMMAND_PREFIX", None)
 
 
 class TestSettingsFixtures:
@@ -156,21 +136,13 @@ class TestSettingsFixtures:
     def test_fixture_provides_test_settings(self, settings: Settings) -> None:
         """Test that the global settings fixture works correctly."""
         assert settings.discord_token == "test_token_12345"
-        assert settings.sink_name == "test_sink"
         assert settings.log_level == "DEBUG"
-        assert settings.audio_rate == 48000
 
     def test_fixture_provides_complete_config(self, settings: Settings) -> None:
         """Test that fixture provides all required configuration."""
         # All fields should be accessible
         assert settings.discord_token
         assert settings.discord_command_prefix
-        assert settings.sink_name
-        assert settings.audio_format
-        assert settings.audio_rate > 0
-        assert settings.audio_channels > 0
-        assert settings.api_host
-        assert settings.api_port > 0
         assert settings.log_level
 
 
@@ -182,22 +154,22 @@ class TestSettingsMutability:
         settings = Settings(discord_token="token")
 
         # Pydantic v2 models are mutable by default
-        settings.sink_name = "new_sink"
-        assert settings.sink_name == "new_sink"
+        settings.log_level = "ERROR"
+        assert settings.log_level == "ERROR"
 
-        settings.audio_rate = 96000
-        assert settings.audio_rate == 96000
+        settings.discord_command_prefix = "?"
+        assert settings.discord_command_prefix == "?"
 
     def test_settings_mutability_preserves_other_fields(self) -> None:
         """Test that modifying one field doesn't affect others."""
         settings = Settings(discord_token="original_token")
         original_token = settings.discord_token
 
-        settings.sink_name = "modified_sink"
+        settings.log_level = "ERROR"
 
         # Other fields remain unchanged
         assert settings.discord_token == original_token
-        assert settings.audio_rate == 48000
+        assert settings.discord_command_prefix == "!"
 
 
 class TestSettingsExtraFields:
