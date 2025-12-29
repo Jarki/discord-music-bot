@@ -13,6 +13,7 @@ from src.shared.models.config import settings
 async def main() -> None:
     setup_logger()
 
+    # Configure bot intents
     intents = discord.Intents.default()
     intents.members = True
     intents.message_content = True

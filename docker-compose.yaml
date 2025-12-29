@@ -1,0 +1,13 @@
+name: discord-music-bot
+
+services:
+  discord-bot:
+    build: .
+    container_name: discord-music-bot
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
