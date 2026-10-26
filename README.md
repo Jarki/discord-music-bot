@@ -31,6 +31,9 @@ cp .env.example .env
 uv run python -m src.bot
 ```
 
+YouTube extraction requires `yt-dlp>=2026.10.21`. Run `uv sync --locked` to
+install the versions recorded in `uv.lock`, including the updated extractor.
+
 ## Required Setup
 
 1. Create a Discord bot at https://discord.com/developers/applications
