@@ -38,7 +38,7 @@ class QueueMode(str, Enum):
 
 
 class Track(BaseModel):
-    """Represents a single item in the queue."""
+    """A queued track with its original track/page URL, not a cached media URL."""
 
     type: str
     title: str

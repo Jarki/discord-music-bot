@@ -34,6 +34,10 @@ uv run python -m src.bot
 YouTube extraction requires `yt-dlp>=2026.10.21`. Run `uv sync --locked` to
 install the versions recorded in `uv.lock`, including the updated extractor.
 
+Queued tracks retain their original page URLs. The bot resolves a fresh media
+stream immediately before each playback, so long playlists and repeat mode do
+not reuse expired stream links.
+
 ## Required Setup
 
 1. Create a Discord bot at https://discord.com/developers/applications

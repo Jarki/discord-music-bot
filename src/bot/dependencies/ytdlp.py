@@ -34,7 +34,14 @@ class YTDLSource(discord.PCMVolumeTransformer):
         *,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> YTDLSource:
+        """Resolve a fresh media URL immediately before starting playback."""
         loop = loop or asyncio.get_event_loop()
+        data = await loop.run_in_executor(
+            None, lambda: ytdl.extract_info(url, download=False, process=True)
+        )
+        stream_url = data.get("url")
+        if not stream_url:
+            raise ValueError("No media URL found in YouTube DL data")
 
         ffmpeg_options = {
             "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -42,7 +49,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             "stderr": subprocess.PIPE,
         }
 
-        return cls(discord.FFmpegPCMAudio(url, **ffmpeg_options))
+        return cls(discord.FFmpegPCMAudio(stream_url, **ffmpeg_options))
 
     @classmethod
     async def get_tracks_info(
@@ -51,6 +58,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         *,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> Track | list[PlaylistTrack] | list[SearchResult]:
+        """Load queue metadata while retaining stable track/page URLs."""
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(
             None, lambda: ytdl.extract_info(url, download=False, process=True)
@@ -64,7 +72,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             entries: list[dict] = data["entries"]
 
             for entry in entries:
-                track_url = entry.get("url")
+                track_url = entry.get("webpage_url") or entry.get("url")
                 if track_url is None:
                     continue
 
@@ -83,7 +91,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
             # Playlist
             tracks = []
             for entry in data["entries"]:
-                track_url = entry.get("url")
+                track_url = entry.get("webpage_url") or entry.get("url")
                 if track_url is None:
                     continue
 
@@ -91,14 +99,10 @@ class YTDLSource(discord.PCMVolumeTransformer):
                 tracks.append(pt)
             return tracks
 
-        track_url = data.get("url")
-        if track_url is None:
-            raise ValueError("No URL found in YouTube DL data")
-
         playable = Track(
             type=str(data.get("extractor")) or "unknown",
             title=data.get("title") or "Unknown Title",
-            url=track_url,
+            url=data.get("webpage_url") or url,
             thumbnail_url=data.get("thumbnail"),
             author_name=data.get("uploader"),
             duration=int(data.get("duration") or 0),
