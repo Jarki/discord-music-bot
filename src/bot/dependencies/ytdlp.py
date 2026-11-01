@@ -2,6 +2,7 @@ import asyncio
 import shlex
 import subprocess
 from collections.abc import Mapping
+from itertools import islice
 from typing import Any
 
 import discord
@@ -20,6 +21,7 @@ ytdl_format_options: dict[str, Any] = {
     "quiet": True,
     "no_warnings": True,
     "default_search": "ytsearch5",
+    "playlistend": 100,
     "source_address": "0.0.0.0",  # bind to ipv4 since ipv6 addresses cause issues sometimes
 }
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)  # type: ignore
@@ -91,9 +93,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
             results = []
             if "entries" not in data:
                 raise ValueError("No entries found in YouTube search data")
-            entries: list[dict] = data["entries"]
 
-            for entry in entries:
+            for entry in islice(data["entries"], 5):
                 track_url = entry.get("webpage_url") or entry.get("url")
                 if track_url is None:
                     continue
@@ -112,7 +113,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if "entries" in data:
             # Playlist
             tracks = []
-            for entry in data["entries"]:
+            for entry in islice(data["entries"], 100):
                 track_url = entry.get("webpage_url") or entry.get("url")
                 if track_url is None:
                     continue

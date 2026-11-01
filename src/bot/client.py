@@ -259,25 +259,33 @@ class Music(commands.Cog):
                         content="Failed to add track to queue.",
                         ephemeral=True,
                     )
+            elif isinstance(track_or_tracklist, list) and not track_or_tracklist:
+                await context.interaction.followup.send(
+                    content="No tracks found in the playlist."
+                )
             elif (
                 isinstance(track_or_tracklist, list)
                 and len(track_or_tracklist) > 0
                 and isinstance(track_or_tracklist[0], PlaylistTrack)
             ):
                 logger.debug(f"Playlist with {len(track_or_tracklist)} tracks")
-                if len(track_or_tracklist) == 0:
-                    await context.interaction.followup.send(
-                        content="No tracks found in the playlist."
-                    )
-                    return
                 if len(track_or_tracklist) > 100:
                     track_or_tracklist = track_or_tracklist[:100]
 
                 index = self._try_get_index_from_yt_url_playlist(song)
                 logger.debug(f"Starting playlist from index: {index}")
+                if index < 0 or index >= len(track_or_tracklist):
+                    await context.interaction.followup.send(
+                        content=(
+                            "Playlist index must be between 1 and "
+                            f"{len(track_or_tracklist)}."
+                        )
+                    )
+                    return
                 await context.interaction.followup.send(
                     content=f"Adding {len(track_or_tracklist)} tracks to the queue ({song})"
                 )
+                tracks_added = 0
                 for i, pt in enumerate(track_or_tracklist[index:], start=index + 1):
                     logger.debug(f"Playlist track URL ({i}): {pt.yt_url}")
                     track_info = await self.try_handle_get_track_info_from_yt_url(
@@ -300,6 +308,7 @@ class Music(commands.Cog):
                             )
                             return
                         if played_track is not None:
+                            tracks_added += 1
                             await context.text_channel.send(
                                 content=(
                                     f"Queueing track {i} out of {len(track_or_tracklist)}: "
@@ -309,9 +318,14 @@ class Music(commands.Cog):
                                     played_track, context.author
                                 ),
                             )
-                await context.interaction.edit_original_response(
-                    content="Tracks added successfully",
-                )
+                if tracks_added == 0:
+                    await context.interaction.edit_original_response(
+                        content="No tracks from the playlist were added."
+                    )
+                else:
+                    await context.interaction.edit_original_response(
+                        content=f"{tracks_added} playlist tracks added successfully"
+                    )
 
             elif (
                 isinstance(track_or_tracklist, list)
