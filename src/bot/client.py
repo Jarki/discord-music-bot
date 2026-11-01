@@ -367,32 +367,48 @@ class Music(commands.Cog):
         """Skip the current track or multiple tracks"""
         player = context.player
         if not player:
-            await context.interaction.response.send_message(
-                "No player active for this guild.", ephemeral=True
-            )
+            if context.interaction.response.is_done():
+                await context.interaction.delete_original_response()
+                await context.interaction.followup.send(
+                    "No player active for this guild.", ephemeral=True
+                )
+            else:
+                await context.interaction.response.send_message(
+                    "No player active for this guild.", ephemeral=True
+                )
             return
 
         if not player.is_playing() and not player.is_paused:
-            await context.interaction.response.send_message(
-                "Nothing is playing.", ephemeral=True
-            )
+            if context.interaction.response.is_done():
+                await context.interaction.delete_original_response()
+                await context.interaction.followup.send(
+                    "Nothing is playing.", ephemeral=True
+                )
+            else:
+                await context.interaction.response.send_message(
+                    "Nothing is playing.", ephemeral=True
+                )
             return
 
+        if not context.interaction.response.is_done():
+            await context.interaction.response.defer(ephemeral=True)
+
         skipped, track = await player.skip_tracks(songs)
+        await context.interaction.delete_original_response()
         if skipped > 0:
             if track is not None:
-                await context.interaction.response.send_message(
+                await context.interaction.followup.send(
                     f"Skipped {skipped} track(s). Now playing: {self._format_track_link(track)}",
                     ephemeral=False,
                     embed=self._get_track_card(track, context.author),
                 )
             else:
-                await context.interaction.response.send_message(
+                await context.interaction.followup.send(
                     f"Skipped {skipped} track(s). No more tracks in the queue.",
                     ephemeral=False,
                 )
         else:
-            await context.interaction.response.send_message(
+            await context.interaction.followup.send(
                 "Could not skip tracks.", ephemeral=True
             )
 

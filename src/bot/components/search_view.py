@@ -1,4 +1,5 @@
 from collections.abc import Awaitable, Callable
+from typing import cast
 
 import discord
 from discord.ui import Button, View
@@ -20,32 +21,20 @@ class SearchResultsView(View):
 
         # Add numbered buttons for each result (max 5 due to Discord's button limit)
         for idx in range(min(len(results), 5)):
-            button: Button = Button(
-                label=str(idx + 1),
-                style=discord.ButtonStyle.blurple,
-                custom_id=f"select_{idx}",
-                row=0,
-            )
-            # Store the index in the button for later retrieval
-            button.custom_id = f"select_{idx}"
-            button.callback = self._create_callback(idx)
-            self.add_item(button)
+            self.add_item(_SearchResultButton(idx))
 
-    def _create_callback(
-        self, index: int
-    ) -> Callable[[discord.Interaction], Awaitable[None]]:
-        """Create a callback function for a specific search result index."""
-
-        async def callback(interaction: discord.Interaction) -> None:
-            result = self.results[index]
-            await self.on_select(result)
-            # Disable all buttons after selection
-            for item in self.children:
-                if isinstance(item, Button):
-                    item.disabled = True
-            await interaction.response.edit_message(view=self)
-
-        return callback
+    async def _select(
+        self, interaction: discord.Interaction, index: int
+    ) -> None:
+        """Acknowledge and process a search result selection."""
+        await interaction.response.defer()
+        result = self.results[index]
+        await self.on_select(result)
+        # Disable all buttons after selection
+        for item in self.children:
+            if isinstance(item, Button):
+                item.disabled = True
+        await interaction.edit_original_response(view=self)
 
     def get_content(self) -> str:
         """Format search results as a numbered list."""
@@ -87,3 +76,20 @@ class SearchResultsView(View):
 
         embed.description = "\n".join(lines)
         return embed
+
+
+class _SearchResultButton(Button["SearchResultsView"]):
+    """A typed search result button with a standard Discord callback."""
+
+    def __init__(self, index: int) -> None:
+        super().__init__(
+            label=str(index + 1),
+            style=discord.ButtonStyle.blurple,
+            custom_id=f"select_{index}",
+            row=0,
+        )
+        self.index = index
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view = cast(SearchResultsView, self.view)
+        await view._select(interaction, self.index)
