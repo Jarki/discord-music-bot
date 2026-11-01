@@ -27,6 +27,7 @@ def test_settings() -> Settings:
         discord_token="test_token_12345",
         discord_command_prefix="!",
         log_level="DEBUG",
+        _env_file=None,
     )
 
 

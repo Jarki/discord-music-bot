@@ -7,11 +7,12 @@ from loguru import logger
 
 from src.bot.client import Music
 from src.logger_config import setup_logger
-from src.shared.models.config import settings
+from src.shared.models.config import Settings
 
 
 async def main() -> None:
     setup_logger()
+    settings = Settings()  # type: ignore[call-arg]
 
     # Configure bot intents
     intents = discord.Intents.default()
