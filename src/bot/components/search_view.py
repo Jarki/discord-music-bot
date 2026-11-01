@@ -3,6 +3,7 @@ from typing import cast
 
 import discord
 from discord.ui import Button, View
+from loguru import logger
 
 from src.bot.models import SearchResult
 
@@ -18,6 +19,7 @@ class SearchResultsView(View):
         super().__init__(timeout=60)
         self.results = results
         self.on_select = on_select
+        self._selected = False
 
         # Add numbered buttons for each result (max 5 due to Discord's button limit)
         for idx in range(min(len(results), 5)):
@@ -27,13 +29,28 @@ class SearchResultsView(View):
         self, interaction: discord.Interaction, index: int
     ) -> None:
         """Acknowledge and process a search result selection."""
-        await interaction.response.defer()
-        result = self.results[index]
-        await self.on_select(result)
-        # Disable all buttons after selection
+        if self._selected:
+            await interaction.response.defer()
+            return
+
+        self._selected = True
         for item in self.children:
             if isinstance(item, Button):
                 item.disabled = True
+        self.stop()
+
+        await interaction.response.defer()
+        result = self.results[index]
+        try:
+            await self.on_select(result)
+        except Exception:
+            logger.exception("Search result selection failed")
+            await interaction.edit_original_response(
+                content="An error occurred while processing the selected track.",
+                view=self,
+            )
+            return
+
         await interaction.edit_original_response(view=self)
 
     def get_content(self) -> str:
