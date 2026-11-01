@@ -192,22 +192,25 @@ class Player:
         """Skip multiple tracks in the queue and start playing the next one.
 
         Args:
-            count: Number of tracks to skip (must be >= 1)
+            count: Number of tracks to skip (must be between 1 and 256)
 
         Returns:
             Number of tracks actually skipped
         """
         if count <= 0:
             return 0, None
+        if count > 256:
+            raise ValueError("count must not exceed 256")
 
-        # Advance cursor count times
+        # Each advance skips the track at the current cursor. Count that track even
+        # when advancing discovers that the queue is exhausted.
         skipped = 0
         track = None
         for _ in range(count):
+            skipped += 1
             track = self._advance_queue(force_skip=True)
-            if track is not None:
-                skipped += 1
-
+            if track is None:
+                break
         self._current_track = track
         self._autoplay = False
         if track is not None:

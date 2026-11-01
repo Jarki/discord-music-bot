@@ -344,7 +344,11 @@ class Music(commands.Cog):
     @app_commands.command(name="skip", description="Skip the current track")
     @app_commands.describe(songs="Number of songs to skip (default 1)")
     @ensure_music_player_context
-    async def skip(self, context: MusicPlayerContext, songs: int = 1) -> None:
+    async def skip(
+        self,
+        context: MusicPlayerContext,
+        songs: app_commands.Range[int, 1, 256] = 1,
+    ) -> None:
         """Skip the current track or multiple tracks"""
         player = context.player
         if not player:
