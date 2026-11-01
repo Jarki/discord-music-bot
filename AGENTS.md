@@ -90,14 +90,15 @@ Configuration is managed via Pydantic Settings and loaded from `.env`:
 ```python
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     # Discord configuration
     discord_token: str
     discord_command_prefix: str = "!"
-    
+
     # Logging
     log_level: str = "INFO"
-    
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

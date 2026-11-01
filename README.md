@@ -31,15 +31,30 @@ cp .env.example .env
 uv run python -m src.bot
 ```
 
-YouTube extraction requires `yt-dlp>=2026.10.21`. Run `uv sync --locked` to
-install the versions recorded in `uv.lock`, including the updated extractor.
+YouTube extraction uses `yt-dlp[default,deno]>=2026.10.21`. Run
+`uv sync --locked` to install the locked extractor, EJS challenge-solving
+components, and Deno runtime. FFmpeg must also be installed.
 
-Queued tracks retain their original page URLs. The bot resolves a fresh media
-stream immediately before each playback, so long playlists and repeat mode do
-not reuse expired stream links.
+Queued tracks retain their original YouTube page URLs. The bot resolves fresh
+media immediately before playback rather than reusing expiring stream links.
+Required extractor HTTP headers are forwarded to FFmpeg for playback.
 
-Playlists larger than 100 entries use only their first 100 entries instead of
-being rejected.
+### Playback and queue behavior
+
+- Search returns at most five selectable results. A selection is claimed once,
+  and controls are disabled before slow extraction.
+- Playlists use only their first 100 entries. A requested start index outside
+  that retained range is rejected instead of reporting that nothing was queued
+  as a successful addition.
+- The queue holds at most 256 entries. Normal mode removes consumed entries;
+  repeat and shuffle modes retain their collection.
+- Unavailable tracks are skipped. Consecutive failures stop after one bounded
+  traversal rather than retrying a broken repeating queue indefinitely.
+- Clear and leave invalidate pending playback and obsolete completion callbacks.
+  Skipping preserves the newly started current track.
+- Join/play can connect an idle bot, but commands do not move an active bot
+  between voice channels. Playback mutations require the caller to be in the
+  bot's voice channel; queue/current inspection remains read-only.
 
 ## Required Setup
 
@@ -56,19 +71,54 @@ being rejected.
 - `/join` - Join your voice channel
 - `/leave` - Leave the voice channel
 - `/play <song>` - Play a song from URL or search query
-- `/skip [songs]` - Skip current track or multiple tracks
+- `/skip [songs]` - Skip 1–256 tracks, stopping at queue exhaustion
 - `/pause` - Pause playback
 - `/resume` - Resume playback
 - `/current` - Show currently playing track
 - `/queue` - Display the queue
 - `/clear` - Clear the queue
-- `/mode <normal|loop|shuffle>` - Set playback mode
+- `/mode <no_repeat|repeat_queue|repeat_single|shuffle>` - Set playback mode
+
+## Pi deployment
+
+The manual **Deploy Dev** and **Deploy Prod** GitHub Actions workflows use the
+same `[self-hosted, pi]` runner labels as `idontwant_toopen_insta`. The runner must
+be available to this repository and have Docker with Compose/Buildx support.
+Production also uses QEMU for cross-platform builds.
+
+| Environment | Runner-local configuration | Compose project | Published platforms |
+| --- | --- | --- | --- |
+| Dev | `$HOME/deploy/loud-bot-dev/.env` | `loud-bot-dev` | `linux/arm64` |
+| Prod | `$HOME/deploy/loud-bot-prod/.env` | `loud-bot-prod` | `linux/amd64`, `linux/arm64` |
+
+Before dispatching, create the appropriate runner-local `.env` using
+`.env.example`, set `DISCORD_TOKEN`, and restrict its permissions (`chmod 600`).
+Use a **separate Discord application/token for dev** so both deployments do not
+control the same bot. Tokens are not committed or supplied as workflow inputs.
+An inherited runner `DISCORD_TOKEN` cannot override the deployment-local token.
+
+In GitHub Actions, choose the workflow and a trusted Git ref. Optional
+`compose_ref` selects the ref for **both** the image and Compose file;
+`image_tag` sets a published alias: `latest` by default for dev, `prod` for prod.
+The workflow logs in to GHCR with `GITHUB_TOKEN`, builds and pushes an
+environment-specific image, then deploys its immutable digest with
+`docker compose pull` and `up --wait`.
+Each environment has its own deployment concurrency group, image repository,
+directory, and Compose project.
+
+For local Docker use, set up `.env` and run `docker compose up --build -d`.
+Without `LOUD_BOT_IMAGE`, Compose uses `loud-bot:local`; deployed runs supply
+the GHCR digest. Container readiness does not prove successful Discord login:
+check the bot's logs and voice behavior after deployment.
+
 
 ## Development
 
 First, install all of the dependencies:
 
-```uv run sync --all-groups```
+```bash
+uv sync --all-groups
+```
 
 ### Tools
 
