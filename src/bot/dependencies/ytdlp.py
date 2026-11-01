@@ -90,11 +90,12 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
         if data.get("extractor") == "youtube:search":
             # Search results
-            results = []
+            results: list[SearchResult] = []
             if "entries" not in data:
                 raise ValueError("No entries found in YouTube search data")
-
             for entry in islice(data["entries"], 5):
+                if entry is None:
+                    continue
                 track_url = entry.get("webpage_url") or entry.get("url")
                 if track_url is None:
                     continue
@@ -106,14 +107,14 @@ class YTDLSource(discord.PCMVolumeTransformer):
                     duration=int(entry.get("duration") or 0),
                 )
                 results.append(sr)
-            if len(results) == 1:
-                return results[0]
             return results
 
         if "entries" in data:
             # Playlist
             tracks = []
             for entry in islice(data["entries"], 100):
+                if entry is None:
+                    continue
                 track_url = entry.get("webpage_url") or entry.get("url")
                 if track_url is None:
                     continue

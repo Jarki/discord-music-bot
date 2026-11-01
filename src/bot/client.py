@@ -261,7 +261,8 @@ class Music(commands.Cog):
                     )
             elif isinstance(track_or_tracklist, list) and not track_or_tracklist:
                 await context.interaction.followup.send(
-                    content="No tracks found in the playlist."
+                    content="No tracks found for this search or playlist.",
+                    ephemeral=True,
                 )
             elif (
                 isinstance(track_or_tracklist, list)
