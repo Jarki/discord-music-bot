@@ -42,4 +42,3 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
-
