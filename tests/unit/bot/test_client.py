@@ -32,7 +32,9 @@ async def test_play_queues_only_first_100_playlist_entries(
     )
     context = SimpleNamespace(
         interaction=SimpleNamespace(
-            response=SimpleNamespace(defer=mocker.AsyncMock()),
+            response=SimpleNamespace(
+                defer=mocker.AsyncMock(), is_done=lambda: False
+            ),
             followup=SimpleNamespace(send=mocker.AsyncMock()),
             edit_original_response=mocker.AsyncMock(),
         )

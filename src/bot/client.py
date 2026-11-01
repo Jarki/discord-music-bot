@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib import parse
 
 import discord
@@ -24,63 +24,86 @@ class MusicPlayerContext(pydantic.BaseModel):
     player: Player
     author: discord.Member
     text_channel: discord.TextChannel
-    vc: discord.VoiceClient
+    vc: discord.VoiceClient | None
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
 
-def ensure_music_player_context(func: Callable) -> Callable:
-    @wraps(func)
-    async def wrapper(
-        self: Music, interaction: discord.Interaction, *args: Any, **kwargs: Any
-    ) -> Any:
-        if not interaction.guild:
-            await interaction.response.send_message(
-                "❌ This command cannot be used in private messages.", ephemeral=True
-            )
-            return
-
-        author = cast(discord.Member, interaction.user)
-        vc = cast(discord.VoiceClient | None, interaction.guild.voice_client)
-
-        if vc is None:
-            if author.voice and author.voice.channel:
-                vc = await author.voice.channel.connect()
-            else:
+def ensure_music_player_context(
+    voice_policy: Literal["join", "mutate", "read_only"],
+) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(
+            self: Music, interaction: discord.Interaction, *args: Any, **kwargs: Any
+        ) -> Any:
+            if not interaction.guild:
                 await interaction.response.send_message(
-                    "❌ You are not connected to a voice channel.", ephemeral=True
+                    "❌ This command cannot be used in private messages.", ephemeral=True
                 )
                 return
 
-        elif author.voice and vc.channel != author.voice.channel:
-            await vc.move_to(author.voice.channel)
+            if interaction.channel is None or not isinstance(
+                interaction.channel, discord.TextChannel
+            ):
+                await interaction.response.send_message(
+                    "❌ Interaction channel is invalid.", ephemeral=True
+                )
+                return
 
-        if self.player_manager is None:
-            raise RuntimeError("Player manager not initialized.")
+            if self.player_manager is None:
+                raise RuntimeError("Player manager not initialized.")
 
-        if interaction.channel is None or not isinstance(
-            interaction.channel, discord.TextChannel
-        ):
-            await interaction.response.send_message(
-                "❌ Interaction channel is invalid.", ephemeral=True
+            author = cast(discord.Member, interaction.user)
+            vc = cast(discord.VoiceClient | None, interaction.guild.voice_client)
+            author_channel = author.voice.channel if author.voice else None
+
+            if voice_policy == "join":
+                if author_channel is None:
+                    await interaction.response.send_message(
+                        "❌ You are not connected to a voice channel.", ephemeral=True
+                    )
+                    return
+                if vc is None or not vc.is_connected():
+                    await interaction.response.defer(ephemeral=True)
+                    if vc is not None:
+                        await vc.disconnect(force=True)
+                    vc = await author_channel.connect()
+                elif vc.channel != author_channel:
+                    await interaction.response.send_message(
+                        "❌ You must be in the bot's voice channel to use this command.",
+                        ephemeral=True,
+                    )
+                    return
+            elif voice_policy == "mutate":
+                if vc is None or not vc.is_connected():
+                    await interaction.response.send_message(
+                        "❌ The bot is not connected to a voice channel.", ephemeral=True
+                    )
+                    return
+                if author_channel is None or vc.channel != author_channel:
+                    await interaction.response.send_message(
+                        "❌ You must be in the bot's voice channel to use this command.",
+                        ephemeral=True,
+                    )
+                    return
+
+            guild_id = str(interaction.guild.id)
+            player = self.player_manager.get_or_create_player(guild_id)
+            context = MusicPlayerContext(
+                interaction=interaction,
+                guild_id=guild_id,
+                player_manager=self.player_manager,
+                player=player,
+                author=author,
+                vc=vc,
+                text_channel=interaction.channel,
             )
-            return
+            return await func(self, context, *args, **kwargs)
 
-        player = self.player_manager.get_or_create_player(str(interaction.guild.id))
+        return wrapper
 
-        context = MusicPlayerContext(
-            interaction=interaction,
-            guild_id=str(interaction.guild.id),
-            player_manager=self.player_manager,
-            player=player,
-            author=author,
-            vc=vc,
-            text_channel=interaction.channel,
-        )
-
-        return await func(self, context, *args, **kwargs)
-
-    return wrapper
+    return decorator
 
 
 class Music(commands.Cog):
@@ -112,26 +135,53 @@ class Music(commands.Cog):
         )
 
     @app_commands.command(name="join", description="Joins the voice channel")
-    @ensure_music_player_context
+    @ensure_music_player_context("join")
     async def join(self, context: MusicPlayerContext) -> None:
         """Joins the voice channel"""
-        await context.interaction.response.send_message(
-            "Joined voice channel!", ephemeral=True
-        )
-
-    @app_commands.command(name="leave", description="Leaves the voice channel")
-    @ensure_music_player_context
-    async def leave(self, context: MusicPlayerContext) -> None:
-        """Leaves the voice channel"""
-        if context.interaction.guild and context.interaction.guild.voice_client:
-            await context.interaction.guild.voice_client.disconnect(force=True)
-            await context.interaction.response.send_message(
-                "Left voice channel!", ephemeral=True
+        if context.interaction.response.is_done():
+            await context.interaction.edit_original_response(
+                content="Joined voice channel!"
             )
         else:
             await context.interaction.response.send_message(
+                "Already in your voice channel.", ephemeral=True
+            )
+
+    @app_commands.command(name="leave", description="Leaves the voice channel")
+    @ensure_music_player_context("read_only")
+    async def leave(self, context: MusicPlayerContext) -> None:
+        guild = context.interaction.guild
+        vc = context.vc if guild else None
+        if vc is None:
+            context.player.clear_queue()
+            context.player_manager.remove_player(context.guild_id)
+            await context.interaction.response.send_message(
                 "Not in a voice channel.", ephemeral=True
             )
+            return
+
+        if not vc.is_connected():
+            await context.interaction.response.defer(ephemeral=True)
+            context.player.clear_queue()
+            context.player_manager.remove_player(context.guild_id)
+            await vc.disconnect(force=True)
+            await context.interaction.edit_original_response(
+                content="Cleaned up disconnected voice session."
+            )
+            return
+
+        if context.author.voice is None or context.author.voice.channel != vc.channel:
+            await context.interaction.response.send_message(
+                "❌ You must be in the bot's voice channel to use this command.",
+                ephemeral=True,
+            )
+            return
+
+        await context.interaction.response.defer(ephemeral=True)
+        context.player.clear_queue()
+        context.player_manager.remove_player(context.guild_id)
+        await vc.disconnect(force=True)
+        await context.interaction.edit_original_response(content="Left voice channel!")
 
     async def _queue_track_and_play_maybe(
         self,
@@ -139,6 +189,12 @@ class Music(commands.Cog):
         track: Track,
     ) -> Track | None:
         player = context.player
+        if context.player_manager.get_player(context.guild_id) is not context.player:
+            await context.interaction.followup.send(
+                content="Playback request expired after leaving the voice channel.",
+                ephemeral=True,
+            )
+            return None
 
         # Add track to queue
         await player.add_track(track)
@@ -229,10 +285,11 @@ class Music(commands.Cog):
 
     @app_commands.command(name="play", description="Add a track to the queue and play")
     @app_commands.describe(song="URL or search term of the song to play")
-    @ensure_music_player_context
+    @ensure_music_player_context("join")
     async def play(self, context: MusicPlayerContext, song: str) -> None:
         """Add a track to the queue and play if nothing is playing"""
-        await context.interaction.response.defer(ephemeral=True)
+        if not context.interaction.response.is_done():
+            await context.interaction.response.defer(ephemeral=True)
 
         try:
             track_or_tracklist = await YTDLSource.get_tracks_info(
@@ -358,7 +415,7 @@ class Music(commands.Cog):
 
     @app_commands.command(name="skip", description="Skip the current track")
     @app_commands.describe(songs="Number of songs to skip (default 1)")
-    @ensure_music_player_context
+    @ensure_music_player_context("mutate")
     async def skip(
         self,
         context: MusicPlayerContext,
@@ -413,7 +470,7 @@ class Music(commands.Cog):
             )
 
     @app_commands.command(name="pause", description="Pause the current track")
-    @ensure_music_player_context
+    @ensure_music_player_context("mutate")
     async def pause(self, context: MusicPlayerContext) -> None:
         """Pause the current track"""
         player = context.player
@@ -428,7 +485,7 @@ class Music(commands.Cog):
         )
 
     @app_commands.command(name="resume", description="Resume paused playback")
-    @ensure_music_player_context
+    @ensure_music_player_context("mutate")
     async def resume(self, context: MusicPlayerContext) -> None:
         """Resume paused playback"""
         player = context.player
@@ -447,7 +504,7 @@ class Music(commands.Cog):
     )
     @app_commands.describe(mode="Playback mode to set")
     @app_commands.choices(mode=QueueMode.choices())
-    @ensure_music_player_context
+    @ensure_music_player_context("mutate")
     async def mode(self, context: MusicPlayerContext, mode: str) -> None:
         """Set the playback mode for the current guild's player"""
         try:
@@ -464,7 +521,7 @@ class Music(commands.Cog):
             await context.interaction.response.send_message(str(e), ephemeral=True)
 
     @app_commands.command(name="current", description="See the currently playing track")
-    @ensure_music_player_context
+    @ensure_music_player_context("read_only")
     async def current(self, context: MusicPlayerContext) -> None:
         player = context.player
         if not player or not player.current_track:
@@ -478,7 +535,7 @@ class Music(commands.Cog):
         await context.interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="queue", description="Show the current queue")
-    @ensure_music_player_context
+    @ensure_music_player_context("read_only")
     async def queue(self, context: MusicPlayerContext) -> None:
         player = context.player
         if not player:
@@ -510,7 +567,7 @@ class Music(commands.Cog):
         )
 
     @app_commands.command(name="clear", description="Clear the current queue")
-    @ensure_music_player_context
+    @ensure_music_player_context("mutate")
     async def clear(self, context: MusicPlayerContext) -> None:
         player = context.player
         if not player:
