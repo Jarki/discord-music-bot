@@ -1,12 +1,14 @@
-name: discord-music-bot
+name: loud-bot-local
 
 services:
   discord-bot:
     build: .
-    container_name: discord-music-bot
+    image: ${LOUD_BOT_IMAGE:-loud-bot:local}
     restart: unless-stopped
     environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?DISCORD_TOKEN must be set}
+      DISCORD_COMMAND_PREFIX: ${DISCORD_COMMAND_PREFIX:-!}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     deploy:
       resources:
         limits:
