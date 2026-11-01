@@ -1,5 +1,7 @@
 import asyncio
+import shlex
 import subprocess
+from collections.abc import Mapping
 from typing import Any
 
 import discord
@@ -23,6 +25,20 @@ ytdl_format_options: dict[str, Any] = {
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)  # type: ignore
 
 
+def _ffmpeg_headers_option(headers: Mapping[str, str] | None) -> str:
+    if not headers:
+        return ""
+
+    lines: list[str] = []
+    for name, value in headers.items():
+        if "\r" in name or "\n" in name or "\r" in value or "\n" in value:
+            raise ValueError("HTTP header names and values cannot contain CR or LF")
+        lines.append(f"{name}: {value}")
+
+    header_block = "\r\n".join(lines) + "\r\n"
+    return f" -headers {shlex.quote(header_block)}"
+
+
 class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source: discord.FFmpegPCMAudio, *, volume: float = 0.5) -> None:
         super().__init__(source, volume)
@@ -43,13 +59,19 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if not stream_url:
             raise ValueError("No media URL found in YouTube DL data")
 
-        ffmpeg_options = {
-            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-            "options": "-vn",
-            "stderr": subprocess.PIPE,
-        }
+        before_options = (
+            "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+            + _ffmpeg_headers_option(data.get("http_headers"))
+        )
 
-        return cls(discord.FFmpegPCMAudio(stream_url, **ffmpeg_options))
+        return cls(
+            discord.FFmpegPCMAudio(
+                stream_url,
+                before_options=before_options,
+                options="-vn",
+                stderr=subprocess.PIPE,
+            )
+        )
 
     @classmethod
     async def get_tracks_info(
