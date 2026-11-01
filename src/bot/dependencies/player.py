@@ -27,7 +27,6 @@ class Player:
         self.guild_id = guild_id
         self.queue_manager = queue_manager
         self.bot = bot
-        self.is_paused = False
         self._current_track: Track | None = None
         self._current_voice_client: discord.VoiceClient | None = None
         self._generation = 0
@@ -202,6 +201,16 @@ class Player:
         )
 
     @property
+    def is_paused(self) -> bool:
+        """Return whether the connected voice client is currently paused."""
+        voice_client = self._get_voice_client_if_connected()
+        return (
+            voice_client is not None
+            and voice_client.is_connected()
+            and voice_client.is_paused()
+        )
+
+    @property
     def current_track(self) -> Track | None:
         """Get the currently playing track."""
         return self._current_track
@@ -220,7 +229,6 @@ class Player:
         vc = self._get_voice_client()
         if vc and vc.is_playing():
             vc.pause()
-            self.is_paused = True
             return True
         return False
 
@@ -233,7 +241,6 @@ class Player:
         vc = self._get_voice_client()
         if vc and vc.is_paused():
             vc.resume()
-            self.is_paused = False
             return True
         return False
 
