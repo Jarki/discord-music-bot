@@ -202,15 +202,20 @@ class Player:
         if count > 256:
             raise ValueError("count must not exceed 256")
 
-        # Each advance skips the track at the current cursor. Count that track even
-        # when advancing discovers that the queue is exhausted.
+        # A successful advance always skips one queue position, including when the
+        # player starts idle. An exhausted advance only skips a track when there was
+        # a real current track to leave behind.
         skipped = 0
         track = None
+        has_current = self._current_track is not None
         for _ in range(count):
-            skipped += 1
             track = self._advance_queue(force_skip=True)
             if track is None:
+                if has_current:
+                    skipped += 1
                 break
+            skipped += 1
+            has_current = True
         self._current_track = track
         self._autoplay = False
         if track is not None:

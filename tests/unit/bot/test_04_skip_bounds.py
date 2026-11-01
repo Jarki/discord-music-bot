@@ -5,6 +5,7 @@ from pytest_mock import MockerFixture
 
 from src.bot.client import Music
 from src.bot.dependencies.player import Player
+from src.bot.dependencies.queue.in_memory import InMemoryQueueManager
 from src.bot.models.core import Track
 
 pytestmark = pytest.mark.asyncio
@@ -85,6 +86,49 @@ async def test_skipping_last_current_track_counts_it_as_skipped(
     assert skipped == 1
     assert current is None
     advance.assert_called_once_with(force_skip=True)
+
+
+async def test_empty_real_queue_does_not_report_a_skip(
+    mocker: MockerFixture,
+) -> None:
+    player = Player("1", InMemoryQueueManager(), mocker.Mock())
+    mocker.patch.object(player, "stop", return_value=True)
+
+    skipped, current = await player.skip_tracks(1)
+
+    assert skipped == 0
+    assert current is None
+
+
+async def test_already_exhausted_real_queue_does_not_report_a_skip(
+    mocker: MockerFixture,
+) -> None:
+    queue = InMemoryQueueManager()
+    queue.queue_item("1", make_track("exhausted"))
+    queue.get_next("1")
+    player = Player("1", queue, mocker.Mock())
+    mocker.patch.object(player, "stop", return_value=True)
+
+    skipped, current = await player.skip_tracks(1)
+
+    assert skipped == 0
+    assert current is None
+
+
+async def test_idle_player_counts_successful_advance_in_real_queue(
+    mocker: MockerFixture,
+) -> None:
+    queue = InMemoryQueueManager()
+    queued = queue.queue_item("1", make_track("queued"))
+    player = Player("1", queue, mocker.Mock())
+    mocker.patch.object(player, "stop", return_value=True)
+    play = mocker.patch.object(player, "_play_track", new=mocker.AsyncMock())
+
+    skipped, current = await player.skip_tracks(1)
+
+    assert skipped == 1
+    assert current is queued
+    play.assert_awaited_once_with(queued)
 
 
 @pytest.mark.parametrize("count", [0, -1])
