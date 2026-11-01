@@ -450,6 +450,14 @@ class Music(commands.Cog):
         if not context.interaction.response.is_done():
             await context.interaction.response.defer(ephemeral=True)
 
+        if context.player_manager.get_player(context.guild_id) is not context.player:
+            await context.interaction.delete_original_response()
+            await context.interaction.followup.send(
+                "Skip request expired after leaving the voice channel.",
+                ephemeral=True,
+            )
+            return
+
         skipped, track = await player.skip_tracks(songs)
         await context.interaction.delete_original_response()
         if skipped > 0:

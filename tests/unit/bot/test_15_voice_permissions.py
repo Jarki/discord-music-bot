@@ -65,6 +65,7 @@ def interaction(
         response=Response(events),
         followup=SimpleNamespace(send=mocker.AsyncMock()),
         edit_original_response=mocker.AsyncMock(),
+        delete_original_response=mocker.AsyncMock(),
     )
 
 
@@ -355,3 +356,50 @@ async def test_disconnected_leave_invalidates_suspended_search_after_reconnect(
 
     old_player.add_track.assert_not_awaited()
     replacement.add_track.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_skip_does_not_mutate_replacement_session_after_defer(
+    mocker: MockerFixture,
+) -> None:
+    defer_started = asyncio.Event()
+    resume_defer = asyncio.Event()
+    channel = object()
+    request = interaction(mocker, bot_channel=channel, author_channel=channel)
+
+    async def suspended_defer(**_: Any) -> None:
+        defer_started.set()
+        await resume_defer.wait()
+        request.response.done = True
+
+    request.response.defer = mocker.AsyncMock(side_effect=suspended_defer)
+    old_player = SimpleNamespace(
+        is_playing=mocker.Mock(return_value=True),
+        is_paused=False,
+        skip_tracks=mocker.AsyncMock(),
+    )
+    queued_track = object()
+    replacement_track = object()
+    replacement_player = SimpleNamespace(
+        queue=[queued_track],
+        current_track=replacement_track,
+        skip_tracks=mocker.AsyncMock(),
+    )
+    music = music_with_player(mocker, old_player)
+    manager = music.player_manager
+
+    pending = asyncio.create_task(Music.skip.callback(music, request, 1))
+    await defer_started.wait()
+    manager.get_player.return_value = replacement_player
+    resume_defer.set()
+    await pending
+
+    old_player.skip_tracks.assert_not_awaited()
+    replacement_player.skip_tracks.assert_not_awaited()
+    assert replacement_player.queue == [queued_track]
+    assert replacement_player.current_track is replacement_track
+    request.delete_original_response.assert_awaited_once_with()
+    request.followup.send.assert_awaited_once_with(
+        "Skip request expired after leaving the voice channel.",
+        ephemeral=True,
+    )
