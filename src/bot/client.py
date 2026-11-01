@@ -272,10 +272,7 @@ class Music(commands.Cog):
                     )
                     return
                 if len(track_or_tracklist) > 100:
-                    await context.interaction.followup.send(
-                        content="Playlist is too large (over 100 tracks)."
-                    )
-                    return
+                    track_or_tracklist = track_or_tracklist[:100]
 
                 index = self._try_get_index_from_yt_url_playlist(song)
                 logger.debug(f"Starting playlist from index: {index}")

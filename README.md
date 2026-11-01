@@ -38,6 +38,9 @@ Queued tracks retain their original page URLs. The bot resolves a fresh media
 stream immediately before each playback, so long playlists and repeat mode do
 not reuse expired stream links.
 
+Playlists larger than 100 entries use only their first 100 entries instead of
+being rejected.
+
 ## Required Setup
 
 1. Create a Discord bot at https://discord.com/developers/applications
