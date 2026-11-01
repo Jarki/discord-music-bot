@@ -273,17 +273,16 @@ class InMemoryQueueManager:
         raise RuntimeError(f"Unknown queue mode: {queue.mode}")
 
     def set_mode(self, queue_id: str, mode: QueueMode) -> None:
-        """Set queue playback mode.
+        """Set queue playback mode while preserving the current track.
 
-        When switching to SHUFFLE mode, creates a new shuffled order.
-        When switching from SHUFFLE, clears the shuffle order.
+        The cursor represents an item index in non-shuffle modes and a position
+        in ``shuffle_order`` in shuffle mode. Mode changes translate between
+        those representations. Entering shuffle anchors an active track in the
+        new order, so the next navigation advances without replaying it.
 
         Args:
             queue_id: Identifier for the queue
             mode: The playback mode to set
-
-        Raises:
-            RuntimeError: If queue not found
         """
         if queue_id not in self._queues:
             queue = QueueModel(queue_id=queue_id)
@@ -292,18 +291,25 @@ class InMemoryQueueManager:
         queue = self._queues[queue_id]
 
         if queue.mode == mode:
-            return  # No-op if already in this mode
+            return
+
+        if queue.mode == QueueMode.SHUFFLE:
+            if 0 <= queue.cursor < len(queue.shuffle_order):
+                queue.cursor = queue.shuffle_order[queue.cursor]
+            else:
+                queue.cursor = -1
+            queue.shuffle_order = []
 
         queue.mode = mode
 
         if mode == QueueMode.SHUFFLE:
-            # Create new shuffle order
+            current_item_index = queue.cursor
             queue.shuffle_order = list(range(len(queue.items)))
             random.shuffle(queue.shuffle_order)
-            queue.cursor = -1
-        else:
-            # Clear shuffle order when leaving shuffle mode
-            queue.shuffle_order = []
+            if 0 <= current_item_index < len(queue.items):
+                queue.cursor = queue.shuffle_order.index(current_item_index)
+            else:
+                queue.cursor = -1
 
     def get_current_position(self, queue_id: str) -> int:
         """Get current cursor position.
