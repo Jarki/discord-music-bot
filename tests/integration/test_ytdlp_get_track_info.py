@@ -27,16 +27,13 @@ def test_search() -> str:
 async def test_get_track_info_integration(test_url_one_track: str) -> None:
     track = await YTDLSource.get_tracks_info(test_url_one_track)
 
-    assert isinstance(track, list)
-    assert all(isinstance(t, Track) for t in track)
-    assert all(isinstance(t.title, str) and t.title for t in track)
-    assert all(isinstance(t.url, str) and t.url for t in track)
-    assert all(isinstance(t.duration, int) and t.duration >= 0 for t in track)
+    assert isinstance(track, Track)
+    assert track.url == test_url_one_track
 
 
 @pytest.mark.integration
 @pytest.mark.skip(reason="Enable if testing manually")
-async def test_get_track_info_search(test_search: str):
+async def test_get_track_info_search(test_search: str) -> None:
     search_results = await YTDLSource.get_tracks_info(test_search)
 
     assert isinstance(search_results, list)

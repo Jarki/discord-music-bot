@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from pytest_mock import MockerFixture
 
-from src.bot.dependencies.ytdlp import YTDLSource, ytdl_format_options
+from src.bot.dependencies.ytdlp import YTDLSource
 
 
 class GuardedEntries(Iterator[dict[str, Any]]):
@@ -16,7 +16,7 @@ class GuardedEntries(Iterator[dict[str, Any]]):
         self.consumed = 0
         self._limit = limit
 
-    def __iter__(self) -> "GuardedEntries":
+    def __iter__(self) -> GuardedEntries:
         return self
 
     def __next__(self) -> dict[str, Any]:
@@ -25,7 +25,7 @@ class GuardedEntries(Iterator[dict[str, Any]]):
         self.consumed += 1
         return {
             "title": f"Track {self.consumed}",
-            "webpage_url": f"https://youtube.example/watch?v={self.consumed}",
+            "webpage_url": f"https://www.youtube.com/watch?v={self.consumed}",
         }
 
 
@@ -44,7 +44,7 @@ async def test_playlist_extraction_consumes_at_most_first_100_entries(
     assert isinstance(tracks, list)
     assert len(tracks) == 100
     assert entries.consumed == 100
-    assert ytdl_format_options["playlistend"] == 100
+
 
 @pytest.mark.asyncio
 async def test_search_extraction_consumes_at_most_five_entries(

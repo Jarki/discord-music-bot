@@ -1,9 +1,8 @@
 import asyncio
 import shlex
-import subprocess
 from collections.abc import Mapping
 from itertools import islice
-from typing import Any
+from typing import Any, cast
 
 import discord
 import yt_dlp
@@ -54,8 +53,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
     ) -> YTDLSource:
         """Resolve a fresh media URL immediately before starting playback."""
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=False, process=True)
+        data = cast(
+            dict[str, Any],
+            await loop.run_in_executor(
+                None, lambda: ytdl.extract_info(url, download=False, process=True)
+            ),
         )
         stream_url = data.get("url")
         if not stream_url:
@@ -71,7 +73,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
                 stream_url,
                 before_options=before_options,
                 options="-vn",
-                stderr=subprocess.PIPE,
             )
         )
 
@@ -84,8 +85,11 @@ class YTDLSource(discord.PCMVolumeTransformer):
     ) -> Track | list[PlaylistTrack] | list[SearchResult]:
         """Load queue metadata while retaining stable track/page URLs."""
         loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None, lambda: ytdl.extract_info(url, download=False, process=True)
+        data = cast(
+            dict[str, Any],
+            await loop.run_in_executor(
+                None, lambda: ytdl.extract_info(url, download=False, process=True)
+            ),
         )
 
         if data.get("extractor") == "youtube:search":

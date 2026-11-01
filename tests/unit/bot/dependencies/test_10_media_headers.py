@@ -21,7 +21,7 @@ async def test_stream_forwards_http_headers_as_ffmpeg_input_options(
 ) -> None:
     stream_url = "https://media.example/audio"
     headers = {
-        "User-Agent": "Media Client's \"quoted\"",
+        "User-Agent": 'Media Client\'s "quoted"',
         "Referer": "https://example.com/a page",
         "X-Consumer-Token": "token with spaces",
     }
@@ -45,7 +45,7 @@ async def test_stream_forwards_http_headers_as_ffmpeg_input_options(
             line.split(": ", maxsplit=1) for line in header_option.splitlines()
         )
         assert parsed_headers["X-Consumer-Token"] == "token with spaces"
-        assert parsed_headers["User-Agent"] == "Media Client's \"quoted\""
+        assert parsed_headers["User-Agent"] == 'Media Client\'s "quoted"'
         assert parsed_headers["Referer"] == "https://example.com/a page"
         assert kwargs["options"] == "-vn"
     finally:
