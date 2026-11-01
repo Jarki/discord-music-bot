@@ -151,7 +151,7 @@ class InMemoryQueueManager:
         """Advance cursor and return next item.
 
         Behavior depends on current mode:
-        - NO_REPEAT: Advance cursor, raise error at end
+        - NO_REPEAT: Discard the finished current item and return the next item
         - REPEAT_QUEUE: Advance cursor with wraparound
         - REPEAT_SINGLE: Return same item without advancing
         - SHUFFLE: Navigate through shuffle_order with wraparound
@@ -175,9 +175,12 @@ class InMemoryQueueManager:
             raise RuntimeError("Cannot navigate empty queue")
 
         if queue.mode == QueueMode.NO_REPEAT:
-            if queue.cursor >= len(queue.items) - 1:
+            if queue.cursor >= 0:
+                queue.items.pop(queue.cursor)
+                queue.cursor = -1
+            if not queue.items:
                 raise RuntimeError("No next item available")
-            queue.cursor += 1
+            queue.cursor = 0
             return queue.items[queue.cursor]
 
         elif queue.mode == QueueMode.REPEAT_QUEUE:
@@ -216,7 +219,7 @@ class InMemoryQueueManager:
         """Move cursor back and return previous item.
 
         Behavior depends on current mode:
-        - NO_REPEAT: Move cursor back, raise error at start
+        - NO_REPEAT: Raise because consumed items are not retained
         - REPEAT_QUEUE: Move cursor back with wraparound
         - REPEAT_SINGLE: Return same item without moving
         - SHUFFLE: Navigate backwards through shuffle_order with wraparound
@@ -240,10 +243,7 @@ class InMemoryQueueManager:
             raise RuntimeError("Cannot navigate empty queue")
 
         if queue.mode == QueueMode.NO_REPEAT:
-            if queue.cursor <= 0:
-                raise RuntimeError("No previous item available")
-            queue.cursor -= 1
-            return queue.items[queue.cursor]
+            raise RuntimeError("No previous item available")
 
         elif queue.mode == QueueMode.REPEAT_QUEUE:
             queue.cursor -= 1
@@ -302,7 +302,10 @@ class InMemoryQueueManager:
 
         queue.mode = mode
 
-        if mode == QueueMode.SHUFFLE:
+        if mode == QueueMode.NO_REPEAT and queue.cursor > 0:
+            del queue.items[: queue.cursor]
+            queue.cursor = 0
+        elif mode == QueueMode.SHUFFLE:
             current_item_index = queue.cursor
             queue.shuffle_order = list(range(len(queue.items)))
             random.shuffle(queue.shuffle_order)
