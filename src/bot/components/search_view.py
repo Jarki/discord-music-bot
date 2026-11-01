@@ -37,9 +37,9 @@ class SearchResultsView(View):
         for item in self.children:
             if isinstance(item, Button):
                 item.disabled = True
-        self.stop()
 
         await interaction.response.defer()
+        await interaction.edit_original_response(view=self)
         result = self.results[index]
         try:
             await self.on_select(result)
@@ -49,9 +49,8 @@ class SearchResultsView(View):
                 content="An error occurred while processing the selected track.",
                 view=self,
             )
-            return
-
-        await interaction.edit_original_response(view=self)
+        finally:
+            self.stop()
 
     def get_content(self) -> str:
         """Format search results as a numbered list."""
