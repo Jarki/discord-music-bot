@@ -31,9 +31,7 @@ class FakeVoiceClient:
     def is_paused(self) -> bool:
         return self.paused
 
-    def play(
-        self, source: Any, *, after: Callable[[Exception | None], None]
-    ) -> None:
+    def play(self, source: Any, *, after: Callable[[Exception | None], None]) -> None:
         self.played_sources.append(source)
         self.after = after
         self.playing = True

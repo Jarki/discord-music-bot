@@ -115,7 +115,7 @@ def test_entering_normal_preserves_current_and_discards_only_prior_items(
         manager.queue_item(QUEUE_ID, track)
     mocker.patch(
         "src.bot.dependencies.queue.in_memory.random.shuffle",
-        side_effect=lambda order: None,
+        side_effect=lambda _order: None,
     )
     manager.set_mode(QUEUE_ID, source_mode)
     assert manager.get_next(QUEUE_ID) is tracks[0]

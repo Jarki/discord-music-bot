@@ -7,6 +7,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from src.bot.dependencies.player import Player
+from src.bot.dependencies.queue.in_memory import InMemoryQueueManager
 from src.bot.models.core import Track
 
 
@@ -15,8 +16,11 @@ def _track(name: str) -> Track:
 
 
 def _player(mocker: MockerFixture, tracks: list[Track]) -> tuple[Player, Any, Any]:
-    queue = mocker.Mock()
-    queue.get_next.side_effect = tracks
+    queue = InMemoryQueueManager()
+    for track in tracks:
+        queue.queue_item("1", track)
+    mocker.spy(queue, "get_next")
+    mocker.spy(queue, "reset_queue")
     voice = mocker.Mock()
     voice.is_playing.return_value = False
     voice.is_paused.return_value = False
@@ -67,12 +71,11 @@ async def test_invalidation_rejects_suspended_start_and_cleans_source(
     assert player.current_track is None
 
 
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["stop", "clear"])
-@pytest.mark.parametrize("request", ["play", "skip"])
+@pytest.mark.parametrize("queued_operation", ["play", "skip"])
 async def test_invalidation_cancels_request_waiting_for_playback_lock(
-    mocker: MockerFixture, operation: str, request: str
+    mocker: MockerFixture, operation: str, queued_operation: str
 ) -> None:
     first, queued = _track("first"), _track("queued")
     player, queue, voice = _player(mocker, [first, queued])
@@ -90,7 +93,7 @@ async def test_invalidation_cancels_request_waiting_for_playback_lock(
     )
     loading = asyncio.create_task(player.play_next())
     await resolution_started.wait()
-    if request == "play":
+    if queued_operation == "play":
         waiting = asyncio.create_task(player.play_next())
     else:
         waiting = asyncio.create_task(player.skip_tracks(1))
@@ -103,13 +106,14 @@ async def test_invalidation_cancels_request_waiting_for_playback_lock(
     release_resolution.set()
 
     assert await loading is None
-    if request == "play":
+    if queued_operation == "play":
         assert await waiting is None
     else:
         assert await waiting == (0, None)
     queue.get_next.assert_called_once_with("1", force_skip=False)
     voice.play.assert_not_called()
     source.cleanup.assert_called_once_with()
+
 
 @pytest.mark.asyncio
 async def test_overlapping_starts_advance_queue_once(mocker: MockerFixture) -> None:
@@ -144,9 +148,7 @@ async def test_overlapping_starts_advance_queue_once(mocker: MockerFixture) -> N
 async def test_replaced_voice_client_can_start_before_old_callback(
     mocker: MockerFixture,
 ) -> None:
-    first, second, ghost = (
-        _track(name) for name in ("first", "second", "ghost")
-    )
+    first, second, ghost = (_track(name) for name in ("first", "second", "ghost"))
     player, queue, old_voice = _player(mocker, [first, second, ghost])
     mocker.patch(
         "src.bot.dependencies.player.YTDLSource.stream_from_url",
@@ -188,7 +190,6 @@ async def test_active_or_paused_play_next_does_not_advance(
     assert await player.play_next() is None
     queue.get_next.assert_not_called()
     voice.play.assert_not_called()
-
 
 
 @pytest.mark.asyncio

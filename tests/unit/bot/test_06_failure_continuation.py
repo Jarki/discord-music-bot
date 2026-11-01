@@ -279,9 +279,7 @@ async def test_callback_failure_and_extraction_failure_do_not_wrap_to_broken_tra
     stream = mocker.patch.object(
         YTDLSource,
         "stream_from_url",
-        new=mocker.AsyncMock(
-            side_effect=[broken_source, RuntimeError("unavailable")]
-        ),
+        new=mocker.AsyncMock(side_effect=[broken_source, RuntimeError("unavailable")]),
     )
 
     assert await player.play_next() is broken
@@ -299,9 +297,7 @@ async def test_callback_failure_and_extraction_failure_do_not_wrap_to_broken_tra
 async def test_successive_callback_failures_share_bounded_attempt_history(
     mocker: MockerFixture,
 ) -> None:
-    unavailable, broken_b, broken_c = (
-        _track(name) for name in ("A", "B", "C")
-    )
+    unavailable, broken_b, broken_c = (_track(name) for name in ("A", "B", "C"))
     player, voice = _player(
         mocker,
         [unavailable, broken_b, broken_c],

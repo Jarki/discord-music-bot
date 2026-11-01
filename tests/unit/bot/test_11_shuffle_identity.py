@@ -29,8 +29,10 @@ def test_entering_shuffle_preserves_current_track_without_duplicate(
     mocker: MockerFixture,
 ) -> None:
     manager, tracks = _manager_with_tracks()
+    manager.set_mode(QUEUE_ID, QueueMode.REPEAT_QUEUE)
     assert manager.get_next(QUEUE_ID) is tracks[0]
     assert manager.get_next(QUEUE_ID) is tracks[1]
+    assert manager.get_next(QUEUE_ID) is tracks[2]
     mocker.patch(
         "src.bot.dependencies.queue.in_memory.random.shuffle",
         side_effect=_shuffle_to_201,
@@ -38,9 +40,8 @@ def test_entering_shuffle_preserves_current_track_without_duplicate(
 
     manager.set_mode(QUEUE_ID, QueueMode.SHUFFLE)
 
-    # B is at the end of [C, A, B], so advancing wraps to C rather than
-    # replaying B or resetting playback to the start of the permutation.
-    assert manager.get_next(QUEUE_ID) is tracks[2]
+    # C is first in [C, A, B]; entering shuffle must advance to A, not replay C.
+    assert manager.get_next(QUEUE_ID) is tracks[0]
 
 
 @pytest.mark.parametrize(

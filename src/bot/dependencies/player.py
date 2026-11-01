@@ -153,9 +153,10 @@ class Player:
             ):
                 return None
 
-            track = self._advance_queue(force_skip=True)
-            if track is None:
+            next_track = self._advance_queue(force_skip=True)
+            if next_track is None:
                 return None
+            track = next_track
 
         return None
 
