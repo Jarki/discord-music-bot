@@ -11,7 +11,7 @@ dependencies = [
     "pynacl>=1.5.0",
     "python-dotenv>=1.2.1",
     "types-yt-dlp>=2026.8.19.20261008",
-    "yt-dlp>=2026.10.21",
+    "yt-dlp[default,deno]>=2026.10.21",
 ]
 licence = { text = "MIT" }
 
