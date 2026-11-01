@@ -1,13 +1,13 @@
 """Queue management for bot with support for multiple playback modes."""
 
 import uuid
-from enum import Enum
+from enum import StrEnum
 
 from discord import app_commands
 from pydantic import BaseModel, Field
 
 
-class QueueMode(str, Enum):
+class QueueMode(StrEnum):
     """Queue playback modes (mutually exclusive)."""
 
     NO_REPEAT = "no_repeat"

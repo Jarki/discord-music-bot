@@ -137,7 +137,7 @@ class Music(commands.Cog):
         self,
         context: MusicPlayerContext,
         track: Track,
-    ) -> None | Track:
+    ) -> Track | None:
         player = context.player
 
         # Add track to queue
@@ -264,7 +264,6 @@ class Music(commands.Cog):
                 and len(track_or_tracklist) > 0
                 and isinstance(track_or_tracklist[0], PlaylistTrack)
             ):
-                track_or_tracklist = cast(list[PlaylistTrack], track_or_tracklist)
                 logger.debug(f"Playlist with {len(track_or_tracklist)} tracks")
                 if len(track_or_tracklist) == 0:
                     await context.interaction.followup.send(
@@ -319,7 +318,7 @@ class Music(commands.Cog):
                 and len(track_or_tracklist) > 0
                 and isinstance(track_or_tracklist[0], SearchResult)
             ):
-                search_results = cast(list[SearchResult], track_or_tracklist)
+                search_results = track_or_tracklist
                 logger.debug(
                     f"Search returned {len(track_or_tracklist)} results, taking the first one"
                 )

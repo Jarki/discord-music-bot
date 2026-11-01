@@ -86,6 +86,7 @@ loud_bot/
 Configuration is managed via Pydantic Settings and loaded from `.env`:
 
 **`src/shared/models/config.py`:**
+
 ```python
 from pydantic_settings import BaseSettings
 
@@ -103,6 +104,7 @@ class Settings(BaseSettings):
 ```
 
 **`.env.example`:**
+
 ```
 # Discord
 DISCORD_TOKEN=your_bot_token_here
@@ -131,17 +133,20 @@ uv run python -m src.bot
 All tasks use `uv run poe <task>` via poethepoet:
 
 ### Running the Bot
+
 ```bash
 uv run poe bot               # Start Discord bot
 ```
 
 ### Testing
+
 ```bash
 uv run poe test              # Run all tests (unit only, mocked)
 uv run poe test-cov          # Run tests with coverage report
 ```
 
 ### Code Quality
+
 ```bash
 uv run poe format            # Format code with ruff
 uv run poe format-check      # Check formatting without changes
@@ -151,12 +156,14 @@ uv run poe typecheck         # Type check with mypy
 ```
 
 ### Combined Checks
+
 ```bash
 uv run poe check             # Run all checks (format, lint, typecheck, test)
 uv run poe clean             # Clean build artifacts and caches
 ```
 
 ### Manual Tool Usage
+
 ```bash
 uv run ruff check .          # Lint directly
 uv run ruff format .         # Format directly
@@ -208,6 +215,7 @@ uv run pytest                # Test directly
 4. Run full quality check: `uv run poe check`
 
 ### Adding Dependencies
+
 ```bash
 # Add runtime dependency
 uv add package-name
@@ -220,6 +228,7 @@ uv sync
 ```
 
 ### Before Committing
+
 ```bash
 # Run all quality checks
 uv run poe check
