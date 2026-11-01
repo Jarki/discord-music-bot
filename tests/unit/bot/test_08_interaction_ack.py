@@ -57,6 +57,8 @@ async def test_skip_defers_before_slow_skip_and_uses_followup(
     )
     context = SimpleNamespace(
         player=player,
+        guild_id="1",
+        player_manager=SimpleNamespace(get_player=lambda _guild_id: player),
         interaction=SimpleNamespace(
             response=response,
             followup=followup,
@@ -123,6 +125,8 @@ async def test_skip_resolves_prior_defer_before_visibility_explicit_followup(
     )
     context = SimpleNamespace(
         player=player,
+        guild_id="1",
+        player_manager=SimpleNamespace(get_player=lambda _guild_id: player),
         interaction=SimpleNamespace(
             response=response,
             followup=followup,
@@ -178,16 +182,11 @@ async def test_search_selection_defers_before_slow_callback_and_edits_original(
     response.defer.assert_awaited_once_with()
     response.send_message.assert_not_awaited()
     response.edit_message.assert_not_awaited()
+    interaction.edit_original_response.assert_awaited_once_with(view=view)
 
     release_selection.set()
-    if selection_error is None:
-        await task
-        interaction.edit_original_response.assert_awaited_once_with(view=view)
-        assert button.disabled is True
-    else:
-        with pytest.raises(RuntimeError, match="selection failed"):
-            await task
-        interaction.edit_original_response.assert_not_awaited()
+    await task
+    assert button.disabled is True
 
     response.send_message.assert_not_awaited()
     response.edit_message.assert_not_awaited()

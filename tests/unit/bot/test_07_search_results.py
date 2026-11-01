@@ -19,7 +19,9 @@ pytestmark = pytest.mark.asyncio
 def _context(mocker: MockerFixture) -> SimpleNamespace:
     return SimpleNamespace(
         interaction=SimpleNamespace(
-            response=SimpleNamespace(defer=mocker.AsyncMock()),
+            response=SimpleNamespace(
+                defer=mocker.AsyncMock(), is_done=mocker.Mock(return_value=False)
+            ),
             followup=SimpleNamespace(send=mocker.AsyncMock()),
         )
     )

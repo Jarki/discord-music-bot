@@ -25,9 +25,7 @@ class SearchResultsView(View):
         for idx in range(min(len(results), 5)):
             self.add_item(_SearchResultButton(idx))
 
-    async def _select(
-        self, interaction: discord.Interaction, index: int
-    ) -> None:
+    async def _select(self, interaction: discord.Interaction, index: int) -> None:
         """Acknowledge and process a search result selection."""
         if self._selected:
             await interaction.response.defer()

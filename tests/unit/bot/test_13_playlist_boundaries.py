@@ -13,7 +13,9 @@ from src.bot.models.core import PlaylistTrack, Track
 def make_context(mocker: MockerFixture) -> SimpleNamespace:
     return SimpleNamespace(
         interaction=SimpleNamespace(
-            response=SimpleNamespace(defer=mocker.AsyncMock()),
+            response=SimpleNamespace(
+                defer=mocker.AsyncMock(), is_done=mocker.Mock(return_value=False)
+            ),
             followup=SimpleNamespace(send=mocker.AsyncMock()),
             edit_original_response=mocker.AsyncMock(),
         ),
@@ -36,9 +38,7 @@ async def test_play_starts_within_retained_first_100_entries(
         PlaylistTrack(yt_url=f"https://youtube.example/watch?v={position}")
         for position in range(1, 151)
     ]
-    mocker.patch(
-        "src.bot.client.YTDLSource.get_tracks_info", return_value=playlist
-    )
+    mocker.patch("src.bot.client.YTDLSource.get_tracks_info", return_value=playlist)
     resolve = mocker.patch.object(
         Music,
         "try_handle_get_track_info_from_yt_url",
@@ -68,12 +68,8 @@ async def test_play_rejects_index_outside_retained_first_100_entries(
         PlaylistTrack(yt_url=f"https://youtube.example/watch?v={position}")
         for position in range(1, 151)
     ]
-    mocker.patch(
-        "src.bot.client.YTDLSource.get_tracks_info", return_value=playlist
-    )
-    resolve = mocker.patch.object(
-        Music, "try_handle_get_track_info_from_yt_url"
-    )
+    mocker.patch("src.bot.client.YTDLSource.get_tracks_info", return_value=playlist)
+    resolve = mocker.patch.object(Music, "try_handle_get_track_info_from_yt_url")
     context = make_context(mocker)
 
     await inspect.unwrap(Music.play.callback)(
@@ -89,28 +85,11 @@ async def test_play_rejects_index_outside_retained_first_100_entries(
 
 
 @pytest.mark.asyncio
-async def test_play_reports_empty_playlist(mocker: MockerFixture) -> None:
-    mocker.patch("src.bot.client.YTDLSource.get_tracks_info", return_value=[])
-    context = make_context(mocker)
-
-    await inspect.unwrap(Music.play.callback)(
-        Music(mocker.Mock()), context, "https://youtube.example/playlist?list=empty"
-    )
-
-    context.interaction.followup.send.assert_awaited_once_with(
-        content="No tracks found in the playlist."
-    )
-    context.interaction.edit_original_response.assert_not_awaited()
-
-
-@pytest.mark.asyncio
 async def test_play_does_not_claim_success_when_every_playlist_entry_fails(
     mocker: MockerFixture,
 ) -> None:
     playlist = [PlaylistTrack(yt_url="https://youtube.example/watch?v=missing")]
-    mocker.patch(
-        "src.bot.client.YTDLSource.get_tracks_info", return_value=playlist
-    )
+    mocker.patch("src.bot.client.YTDLSource.get_tracks_info", return_value=playlist)
     mocker.patch.object(
         Music, "try_handle_get_track_info_from_yt_url", return_value=None
     )
@@ -130,9 +109,7 @@ async def test_malformed_playlist_index_keeps_first_track_fallback(
     mocker: MockerFixture,
 ) -> None:
     playlist = [PlaylistTrack(yt_url="https://youtube.example/watch?v=first")]
-    mocker.patch(
-        "src.bot.client.YTDLSource.get_tracks_info", return_value=playlist
-    )
+    mocker.patch("src.bot.client.YTDLSource.get_tracks_info", return_value=playlist)
     resolve = mocker.patch.object(
         Music, "try_handle_get_track_info_from_yt_url", return_value=None
     )

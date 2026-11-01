@@ -1,7 +1,6 @@
 """Voice-channel authorization regressions for music commands."""
 
 import asyncio
-
 from types import SimpleNamespace
 from typing import Any
 
@@ -95,9 +94,7 @@ async def test_outsider_cannot_mutate_active_session(
     mocker: MockerFixture, command: str
 ) -> None:
     bot_channel = object()
-    request = interaction(
-        mocker, bot_channel=bot_channel, author_channel=object()
-    )
+    request = interaction(mocker, bot_channel=bot_channel, author_channel=object())
     player = mocker.Mock()
     music = music_with_player(mocker, player)
 
@@ -138,7 +135,6 @@ async def test_read_only_commands_neither_join_nor_require_voice(
     assert request.guild.voice_client is None
 
 
-
 @pytest.mark.asyncio
 async def test_disconnected_voice_client_is_treated_as_absent(
     mocker: MockerFixture,
@@ -152,7 +148,6 @@ async def test_disconnected_voice_client_is_treated_as_absent(
     assert request.response.messages == [
         "❌ The bot is not connected to a voice channel."
     ]
-
 
 
 @pytest.mark.asyncio
@@ -288,9 +283,7 @@ async def test_stale_search_result_cannot_queue_after_leave_and_reconnect(
         guild_id="123",
         player=stale_player,
         player_manager=manager,
-        interaction=SimpleNamespace(
-            followup=SimpleNamespace(send=mocker.AsyncMock())
-        ),
+        interaction=SimpleNamespace(followup=SimpleNamespace(send=mocker.AsyncMock())),
     )
     music = Music(mocker.Mock())
     track = mocker.Mock()

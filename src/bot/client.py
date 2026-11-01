@@ -39,7 +39,8 @@ def ensure_music_player_context(
         ) -> Any:
             if not interaction.guild:
                 await interaction.response.send_message(
-                    "❌ This command cannot be used in private messages.", ephemeral=True
+                    "❌ This command cannot be used in private messages.",
+                    ephemeral=True,
                 )
                 return
 
@@ -78,7 +79,8 @@ def ensure_music_player_context(
             elif voice_policy == "mutate":
                 if vc is None or not vc.is_connected():
                     await interaction.response.send_message(
-                        "❌ The bot is not connected to a voice channel.", ephemeral=True
+                        "❌ The bot is not connected to a voice channel.",
+                        ephemeral=True,
                     )
                     return
                 if author_channel is None or vc.channel != author_channel:
