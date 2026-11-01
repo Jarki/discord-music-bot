@@ -31,6 +31,7 @@ class Player:
         self._current_voice_client: discord.VoiceClient | None = None
         self._generation = 0
         self._request_epoch = 0
+        self._failed_track_ids: set[str] = set()
         self._playback_lock = asyncio.Lock()
 
     def _get_voice_client(self) -> discord.VoiceClient | None:
@@ -131,14 +132,11 @@ class Player:
         self,
         track: Track,
         voice_client: discord.VoiceClient,
-        excluded_track_id: str | None = None,
     ) -> Track | None:
         """Start a selected track, advancing past failures without retrying entries."""
-        attempted_track_ids = {excluded_track_id} if excluded_track_id else set()
         request_epoch = self._request_epoch
-
-        while track.track_id not in attempted_track_ids:
-            attempted_track_ids.add(track.track_id)
+        while track.track_id not in self._failed_track_ids:
+            self._failed_track_ids.add(track.track_id)
             self._generation += 1
             generation = self._generation
             self._current_track = track
@@ -164,7 +162,6 @@ class Player:
     async def _start_next_locked(
         self,
         force_skip: bool = False,
-        excluded_track_id: str | None = None,
     ) -> Track | None:
         """Advance and start playback while the caller holds the lifecycle lock."""
         voice_client = self._get_voice_client_if_connected()
@@ -178,11 +175,7 @@ class Player:
             self._current_voice_client = None
             return None
 
-        return await self._start_track_locked(
-            track,
-            voice_client,
-            excluded_track_id=excluded_track_id,
-        )
+        return await self._start_track_locked(track, voice_client)
 
     async def play_next(self) -> Track | None:
         """Start the next track unless playback is already active or loading."""
@@ -205,6 +198,7 @@ class Player:
                 voice_client.is_playing() or voice_client.is_paused()
             ):
                 return None
+            self._failed_track_ids.clear()
             return await self._start_next_locked()
 
     async def _advance_after_playback(
@@ -224,17 +218,13 @@ class Player:
                 self._current_track = None
                 self._current_voice_client = None
                 return
-            excluded_track_id = (
-                self._current_track.track_id
-                if failed and self._current_track is not None
-                else None
-            )
+            if failed and self._current_track is not None:
+                self._failed_track_ids.add(self._current_track.track_id)
+            else:
+                self._failed_track_ids.clear()
             self._current_track = None
             self._current_voice_client = None
-            await self._start_next_locked(
-                force_skip=failed,
-                excluded_track_id=excluded_track_id,
-            )
+            await self._start_next_locked(force_skip=failed)
 
     def _after_playback(
         self,
@@ -305,6 +295,7 @@ class Player:
         self._generation += 1
         self._current_track = None
         self._current_voice_client = None
+        self._failed_track_ids.clear()
         vc = self._get_voice_client_if_connected()
         if vc and (vc.is_playing() or vc.is_paused()):
             vc.stop()

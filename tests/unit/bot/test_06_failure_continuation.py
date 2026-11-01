@@ -296,6 +296,60 @@ async def test_callback_failure_and_extraction_failure_do_not_wrap_to_broken_tra
     ]
 
 
+async def test_successive_callback_failures_share_bounded_attempt_history(
+    mocker: MockerFixture,
+) -> None:
+    unavailable, broken_b, broken_c = (
+        _track(name) for name in ("A", "B", "C")
+    )
+    player, voice = _player(
+        mocker,
+        [unavailable, broken_b, broken_c],
+        QueueMode.REPEAT_QUEUE,
+    )
+    b_source = _source(mocker, "B source")
+    c_source = _source(mocker, "C source")
+    retried_b_source = _source(mocker, "retried B source")
+    stream = mocker.patch.object(
+        YTDLSource,
+        "stream_from_url",
+        new=mocker.AsyncMock(
+            side_effect=[
+                RuntimeError("A unavailable"),
+                b_source,
+                c_source,
+                retried_b_source,
+            ]
+        ),
+    )
+
+    assert await player.play_next() is broken_b
+    voice.finish(RuntimeError("B decoder failed"))
+    await _flush_callback()
+    assert player.current_track is broken_c
+
+    voice.finish(RuntimeError("C decoder failed"))
+    await _flush_callback()
+
+    assert player.current_track is None
+    assert voice.played == [b_source, c_source]
+    assert [call.args[0] for call in stream.await_args_list] == [
+        unavailable.url,
+        broken_b.url,
+        broken_c.url,
+    ]
+
+    assert await player.play_next() is broken_b
+    assert player.current_track is broken_b
+    assert voice.played == [b_source, c_source, retried_b_source]
+    assert [call.args[0] for call in stream.await_args_list] == [
+        unavailable.url,
+        broken_b.url,
+        broken_c.url,
+        broken_b.url,
+    ]
+
+
 async def test_normal_repeat_single_completion_still_replays_track(
     mocker: MockerFixture,
 ) -> None:
